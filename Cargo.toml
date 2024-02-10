@@ -1,0 +1,23 @@
+[package]
+name = "goto"
+version = "0.1.0"
+edition = "2021"
+repository = "https://www.github.com/yourname/goto"
+description = "A simple command line tool to navigate to your favorite directories"
+readme = "README.md"
+license = "MIT"
+keywords = ["cli", "navigation", "directory"]
+categories = ["command-line-utilities"]
+authors = ["Bobbob1971"]
+documentation = "https://www.github.com/yourname/goto"
+homepage = "https://www.github.com/yourname/goto"
+
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+regex = "1.5.4"
+
+[features]
+default = ["debug-print"]
+debug-print = []

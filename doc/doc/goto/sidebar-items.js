@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["advance_by","code","find_path","get_args","main"],"macro":["dbg_print","user_error"],"mod":["dirs","global","hist"],"struct":["GlobalData"]};
