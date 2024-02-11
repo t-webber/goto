@@ -1,5 +1,6 @@
 use core::fmt::Write;
 use std::fs;
+use std::process;
 
 use crate::global::Cmd;
 use crate::user_error;
@@ -210,14 +211,19 @@ fn edit(dirline: &DirsLine, success: &mut bool, shortc: &str, path: &str) -> Str
     }
 }
 
-fn std_path(path: &Option<String>) -> &String {
-    path.as_ref().unwrap()
-    // let temp = path
-    //     .expect("Path not found in command line")
-    //     .replace('\\', "/");
-    // temp.strip_suffix('/')
-    //     .map_or(temp.as_str(), |trimed| trimed)
-    // .to_string()
+/// Function to format a path
+/// # Arguments
+/// * `path` - The path to format
+/// # Returns
+/// The formatted path
+/// # Example   
+/// ```
+/// assert!(std_path(&Some(String::from("/home/user/folder/"))) == "/home/user/folder");
+/// ```
+///
+fn std_path(path: &Option<String>) -> String {
+    let somepath = path.as_ref().expect("Path not found in command line");
+    somepath.strip_suffix('/').unwrap_or(somepath).to_owned()
 }
 
 ///////////////////////////////: command keywords functions  :///////////////////////////////
@@ -273,20 +279,20 @@ fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate
             Cmd::Get([shortc, _]) => get(&dirline, success, sstate, shortc.as_ref().expect("No shortcut found in get command")),
             Cmd::Reset => format!(
                 "{};{}",
-                vecline[0..vecline.len()-1].join(";"),
+                vecline.get(0..vecline.len().checked_sub(1).expect("VLine was empty")).expect("vecline was empty").join(";"),
                 0
             ),
             Cmd::Decr(decr) => format!(
                 "{};{}",
-                vecline.join(";"),
-                priory.checked_sub(*decr).expect("Overflow on priority")),
+                vecline.get(0..vecline.len().checked_sub(1).expect("Invalid format of line")).expect("Format of line not valid").join(";"),
+                priory.saturating_sub(*decr)),
 
             Cmd::Rm(shortc) => remove(&dirline, success, shortc),
-            Cmd::Del(path) => if *dirline.path == **path { *success = true; return String::new() } 
+            Cmd::Del(path) => if *dirline.path == *path { *success = true; return String::new() } 
                                        else { dirline.join(";") },
 
-            Cmd::Add([ref shortc, path]) => add(&dirline, success, shortc.as_ref().expect("Second argument expected to add").as_str(), std_path(path)),
-            Cmd::Edit([shortc, path]) => edit(&dirline, success, shortc.as_ref().expect("Second argument expected to add").as_str(), std_path(path)),
+            Cmd::Add([shortc, path]) => add(&dirline, success, shortc.as_ref().expect("Second argument expected to add").as_str(), &std_path(path)),
+            Cmd::Edit([shortc, path]) => edit(&dirline, success, shortc.as_ref().expect("Second argument expected to edit").as_str(), &std_path(path)),
 
             // _ => panic!("Invalid command : {:?}", args),
         };
@@ -325,7 +331,7 @@ pub fn read(dirspath: &str, args: &[Cmd], incr: u32) -> Option<String> {
     let temp = sstate
         .correct
         .clone()
-        .unwrap_or_else(|| sstate.prioritised.clone().unwrap());
+        .unwrap_or_else(|| sstate.prioritised.clone().unwrap_or_default());
 
     let mut res: String = temp;
 
@@ -335,7 +341,7 @@ pub fn read(dirspath: &str, args: &[Cmd], incr: u32) -> Option<String> {
             if success || shortc.is_none() {
                 res = format!("{}/{}", res, path.clone().unwrap_or_default());
             } else {
-                panic!("Shortcut {} not found.", shortc.as_ref().unwrap())
+                panic!("Shortcut {} not found.", shortc.as_ref().expect("No shortcut found in get command"));
             };
             return Some(res);
         }
@@ -385,9 +391,11 @@ pub fn state(dirspath: &str) -> ! {
     let data = binding.lines().collect::<Vec<&str>>();
     for dline in &data {
         dline.split(';').enumerate().for_each(|(idx, elt)| {
-            let new = elt.len() + 1;
+            let new = elt.len().checked_add(1).expect("Overflow on space");
             match spaces.get(idx) {
-                Some(space) if new > *space => *spaces.get_mut(idx).unwrap() = new,
+                Some(space) if new > *space => {
+                    *spaces.get_mut(idx).expect("Expected tab size") = new;
+                }
                 Some(_) => (),
                 None => spaces.push(new),
             };
@@ -408,6 +416,11 @@ pub fn state(dirspath: &str) -> ! {
         writeln!(state, "{str1:<total_space$}{priory}")
             .unwrap_or_else(|er| panic!("Unable to write to string: {er}"));
     }
-    print!("{state}");
-    std::process::exit(0);
+
+    #[allow(clippy::print_stdout)]
+    {
+        print!("{state}");
+    };
+    #[allow(clippy::exit)]
+    process::exit(0);
 }

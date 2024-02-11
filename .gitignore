@@ -1,3 +1,11 @@
 build/
 target/
 tests/
+lib/*
+doc/debug
+doc/.rust*
+debug/
+doc/CACHEDIR.TAG
+release/*.exe
+release/gtc.ps1
+release/expl.ps1

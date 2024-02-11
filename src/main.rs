@@ -1,12 +1,57 @@
 // clippy::restriction,
-#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+#![warn(clippy::all, clippy::pedantic, clippy::restriction, clippy::nursery, clippy::cargo)]
 #![feature(stmt_expr_attributes)]
 #![allow(clippy::implicit_return, clippy::single_call_fn)]
 #![allow(clippy::expect_used, clippy::panic)]
 
 //! Main module: `goto` is a command line tool to navigate through directories.
+//! # Arguments 
+//! * `-add` (or `-a`) - Add a directory to the list of supported directories.
+//! * `-remove` (or `-rm`) - Remove a directory from the list of supported directories.
+//! * `-delete` (or `-del`) - Remove a shortcut from the list of supported shortcuts.
+//! * `-edit` - Edit the path of a directory associated with a shortcut.
+//! * `-reset` - Reset the usage of all the directories in the list of supported directories.
+//! * `-decrement` (or `-decr`) - Decrement the usage of a directory in the list of supported directories.
+//! * `-pop` (or `-p`) - Pop the last directory from the history of directories.
+//! * `-state` (or `?`) - Print the state of the list of supported directories.
+//! * `-noclear` (or `-nc` or `!`) - The terminal is cleared by default after the command. Use this argument to avoid clearing the terminal.
+//! * `-code` (or `-c`) - Open the directory in Visual Studio Code.
+//! * `-still` (or `#`) - Don't change directory after the command (useful with `-code`).
+//! * `-get` (or `-g`) - Get the path of the directory to go to (implies `-still` and `-noclear`).
+//! * `-clear` (or `-cls`) - Totally errase the list of supported directories (⚠️no confirmation and no backup⚠️).
+//! # Examples
+//! In reality, the command will clear the terminal once the command has finished, but the examples are written as if the terminal was not cleared.
+//! ### Add
+//! ```bash
+//! ~ $ gt -add mydir /path/to/dir
+//! ~ $ gt mydir
+//! /path/to/dir $ gt -add mydir2 /path/to/dir
+//! ~ $ cd /
+//! ~ $ gt mydir2
+//! /path/to/dir $ 
+//! ```
+//! ### Edit
+//! ```bash
+//! ~ $ gt -edit mydir /new/path/to/dir
+//! ~ $ gt mydir
+//! /new/path/to/dir $ gt -remove mydir
+//! /new/path/to/dir $ gt mydir // Error: mydir is not a valid shortcut
+//! ```
+//! ### Pop
+//! ```bash
+//! ~ $ gt -add shortcut1 /path/to/a/dir
+//! ~ $ gt -add shortcut2 /snd/path/to/dir
+//! ~ $ gt shortcut1
+//! /path/to/a/dir $ gt shortcut2
+//! /snd/path/to/dir $ gt -pop
+//! /path/to/a/dir $
+//! ```
+//! ### Code
+//! ```bash
+//! ~ $ gt -code shortcut1     // Opens vscode in /new/path/to/dir
+//! /path/to/a/dir $           // Add -still to avoid changing directory
+//! ````
 
-// use core::iter;
 use regex::Regex;
 use crate::global::{Cmd, ToCmd};
 use std::collections;
@@ -30,8 +75,11 @@ struct GlobalData<'global> {
     incr: u32,
     /// Gives the number of arguments for each supported command (except the basic `goto` command that can take 0, 1 or 2 arguments).
     argcs: collections::HashMap<&'global str, usize>,
+    /// `true` if the OS is unix, `false` if the OS is windows
     unix: bool,
+    /// Gives the alias of each supported command
     aliass: collections::HashMap<&'global str, &'global str>,
+    /// Gives the arguments that don't require reading `lib/dirs.csv`.
     no_read: [&'global str; 5],
 }
 
@@ -50,14 +98,16 @@ impl<'global> Default for GlobalData<'global> {
         let mut aliass = collections::HashMap::new();
         aliass.insert("-a", "-add");
         aliass.insert("-rm", "-remove");
-        aliass.insert("-g", "-get");
-        aliass.insert("-d", "-delete");
-        aliass.insert("-e", "-edit");
-        aliass.insert("-res", "-reset");
-        aliass.insert("-c", "-clear");
-        aliass.insert("?", "-state");
-        aliass.insert("-dec", "-decrement");
+        aliass.insert("-del", "-delete");
+        aliass.insert("-decr", "-decrement");
         aliass.insert("-p", "-pop");
+        aliass.insert("?", "-state");
+        aliass.insert("-nc", "-noclear");
+        aliass.insert("!", "-noclear");
+        aliass.insert("-c", "-code");
+        aliass.insert("#", "-still");
+        aliass.insert("-g", "-get");
+        aliass.insert("-cls", "-clear");
 
         let unix = cfg!(target_os = "linux");
         assert!(unix || cfg!(target_os = "windows"), "Unsupported OS");
@@ -96,8 +146,7 @@ fn no_read(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
     args2.iter().for_each(|arg| match arg.as_str() {
         "-pop" => res = Some(hist::popd(hist)),
         "-state" => dirs::state(dirs),
-        "-code" | "-noclear" => (),
-        "-still" => todo!(),
+        "-code" | "-noclear" | "-still" => (),
         _ => panic!("Invalid command <{}> in <{}>", arg, env::args().collect::<Vec<String>>().join(" ")),
     });
     res
@@ -146,10 +195,12 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
     let mut last: Option<String> = None;
 
     loop {
-        match cmdline.next() {
+        let temp = cmdline.next();
+        match temp {
             None => break,
             Some(arg) => {
-                let curr = (*gdata.aliass.get(arg.as_str()).unwrap_or(&arg.as_str())).to_string();
+                let curr = (*gdata.aliass.get(arg.as_str())
+                                    .unwrap_or(&arg.as_str())).to_owned();
 
                 #[rustfmt::skip]
                 match gdata.argcs.get(curr.as_str()) {
@@ -159,21 +210,23 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
                                 &curr, env::args().collect::<Vec<String>>().join(" ")
                         );
                         last = Some(curr.clone());
-                        args1.push(curr.to_cmd().unwrap());
+                        args1.push(curr.to_cmd().unwrap_or_else(|err| panic!("{err}")));
                     }
 
                     None => match curr.as_str() {
                         "features" => break,
-                        "-get" => { last = Some(String::from("-get")); get = true; let cmd = curr.to_cmd().unwrap(); args1.push(cmd); }
+                        "-get" => { last = Some(String::from("-get")); 
+                                    get = true; 
+                                    args1.push(curr.to_cmd().unwrap_or_else(|err| panic!("{err}"))); }
                         // Is a no-read command (code, clear, still, pop, state, noclear, etc.)
                         _ if gdata.no_read.contains(&curr.as_str()) => args2.push(curr.clone()),
-                        _ if last.is_none() => { args1.push(Cmd::Get([Some(curr.clone()), None])); last = Some(String::from("-get")); }
-                        _ if last.as_ref().unwrap() == "-get" => {
-                            let last =  args1.last_mut().unwrap_or_else(|| panic!("Invalid command <{}> in <{}>",
-                                                                 curr, env::args().collect::<Vec<String>>().join(" ")));
-                            last.append(curr);
-                        },
-                        _ => { panic!("Invalid command <{}> in <{}>", curr, env::args().collect::<Vec<String>>().join(" ")); },
+                        _ if last.is_none() => { args1.push(Cmd::Get([Some(curr.clone()), None])); 
+                                                 last = Some(String::from("-get")); }
+                        // _ if last.as_ref().expect("Last isn't none") == "-get" => {
+                        _  => args1.last_mut().unwrap_or_else(|| panic!("Invalid command <{}> in <{}>",
+                                                                        curr, env::args().collect::<Vec<String>>().join(" "))).append(curr),
+                        
+                        // _ => { panic!("Invalid command <{}> in <{}>", curr, env::args().collect::<Vec<String>>().join(" ")); },
                     },
                 }
             },
@@ -195,8 +248,12 @@ fn main() {
     dbg_print!(">>> <{:?}> with <{:?}>\n", args1, args2);
     let path  = dirs::read(gdata.dirs, &args1, gdata.incr);
     let os_path: Option<String> = if gdata.unix {
-        let re = Regex::new(r"(?i)[a-z]:").unwrap();
-        path.map(|p| re.replace(&p, |caps: &regex::Captures| format!("/mnt/{}/", &caps[0].to_lowercase())).to_string())
+        let re = Regex::new("(?i)[a-z]:").unwrap_or_else(|err| panic!("Could't get regex: {err}"));
+        path.map(|pat| re.replace(&pat, |caps: &regex::Captures| {
+            let match_str = caps.get(0).expect("Couldn't windows match pattern in path").as_str();
+            format!("/mnt/{}/", match_str.to_lowercase())
+        }).to_string())
+            
     } else {path};
 
     if let Some(found) = &os_path {
@@ -204,12 +261,14 @@ fn main() {
         code(&args2, found);
     };
 
-    #[allow(clippy::print_stdout)]
     no_read(gdata.dirs, gdata.hist, &args2);
+
+    #[allow(clippy::print_stdout)]
+    {
     print!(
         "{}#{}#{}",
         u8::from(!args2.contains(&String::from("-noclear"))),
         u8::from(get),
         os_path.unwrap_or_default()
-    );
+    );};
 }

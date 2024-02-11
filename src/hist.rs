@@ -1,6 +1,6 @@
 use std::fs;
 use std::process;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time;
 // Imports
 
 /// Push a directory to the history file.
@@ -25,7 +25,7 @@ pub fn pushd(histpath: &str, path: &str) {
     fs::write(histpath,format!("{}\n{path};{};{}",
         fs::read_to_string(histpath).unwrap_or_else(|er| panic!("Unable to read hist file: {er}")).trim(),
         process::id(),
-        SystemTime::now().duration_since(UNIX_EPOCH).expect("Time went backwards").as_secs(),
+        time::SystemTime::now().duration_since(time::UNIX_EPOCH).expect("Time went backwards").as_secs(),
     ))
     .unwrap_or_else(|er| panic!("Unable to write hist file {er}"));
 }

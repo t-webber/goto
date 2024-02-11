@@ -244,19 +244,98 @@
 <a href="#242" id="242">242</a>
 <a href="#243" id="243">243</a>
 <a href="#244" id="244">244</a>
+<a href="#245" id="245">245</a>
+<a href="#246" id="246">246</a>
+<a href="#247" id="247">247</a>
+<a href="#248" id="248">248</a>
+<a href="#249" id="249">249</a>
+<a href="#250" id="250">250</a>
+<a href="#251" id="251">251</a>
+<a href="#252" id="252">252</a>
+<a href="#253" id="253">253</a>
+<a href="#254" id="254">254</a>
+<a href="#255" id="255">255</a>
+<a href="#256" id="256">256</a>
+<a href="#257" id="257">257</a>
+<a href="#258" id="258">258</a>
+<a href="#259" id="259">259</a>
+<a href="#260" id="260">260</a>
+<a href="#261" id="261">261</a>
+<a href="#262" id="262">262</a>
+<a href="#263" id="263">263</a>
+<a href="#264" id="264">264</a>
+<a href="#265" id="265">265</a>
+<a href="#266" id="266">266</a>
+<a href="#267" id="267">267</a>
+<a href="#268" id="268">268</a>
+<a href="#269" id="269">269</a>
+<a href="#270" id="270">270</a>
+<a href="#271" id="271">271</a>
+<a href="#272" id="272">272</a>
+<a href="#273" id="273">273</a>
+<a href="#274" id="274">274</a>
+<a href="#275" id="275">275</a>
+<a href="#276" id="276">276</a>
+<a href="#277" id="277">277</a>
+<a href="#278" id="278">278</a>
 </pre></div><pre class="rust"><code><span class="comment">// clippy::restriction,
-</span><span class="attr">#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
+</span><span class="attr">#![warn(clippy::all, clippy::pedantic, clippy::restriction, clippy::nursery, clippy::cargo)]
 #![feature(stmt_expr_attributes)]
 #![allow(clippy::implicit_return, clippy::single_call_fn)]
 #![allow(clippy::expect_used, clippy::panic)]
 
 </span><span class="doccomment">//! Main module: `goto` is a command line tool to navigate through directories.
+//! # Arguments 
+//! * `-add` (or `-a`) - Add a directory to the list of supported directories.
+//! * `-remove` (or `-rm`) - Remove a directory from the list of supported directories.
+//! * `-delete` (or `-del`) - Remove a shortcut from the list of supported shortcuts.
+//! * `-edit` - Edit the path of a directory associated with a shortcut.
+//! * `-reset` - Reset the usage of all the directories in the list of supported directories.
+//! * `-decrement` (or `-decr`) - Decrement the usage of a directory in the list of supported directories.
+//! * `-pop` (or `-p`) - Pop the last directory from the history of directories.
+//! * `-state` (or `?`) - Print the state of the list of supported directories.
+//! * `-noclear` (or `-nc` or `!`) - The terminal is cleared by default after the command. Use this argument to avoid clearing the terminal.
+//! * `-code` (or `-c`) - Open the directory in Visual Studio Code.
+//! * `-still` (or `#`) - Don't change directory after the command (useful with `-code`).
+//! * `-get` (or `-g`) - Get the path of the directory to go to (implies `-still` and `-noclear`).
+//! * `-clear` (or `-cls`) - Totally errase the list of supported directories (⚠️no confirmation and no backup⚠️).
+//! # Examples
+//! In reality, the command will clear the terminal once the command has finished, but the examples are written as if the terminal was not cleared.
+//! ### Add
+//! ```bash
+//! ~ $ gt -add mydir /path/to/dir
+//! ~ $ gt mydir
+//! /path/to/dir $ gt -add mydir2 /path/to/dir
+//! ~ $ cd /
+//! ~ $ gt mydir2
+//! /path/to/dir $ 
+//! ```
+//! ### Edit
+//! ```bash
+//! ~ $ gt -edit mydir /new/path/to/dir
+//! ~ $ gt mydir
+//! /new/path/to/dir $ gt -remove mydir
+//! /new/path/to/dir $ gt mydir // Error: mydir is not a valid shortcut
+//! ```
+//! ### Pop
+//! ```bash
+//! ~ $ gt -add shortcut1 /path/to/a/dir
+//! ~ $ gt -add shortcut2 /snd/path/to/dir
+//! ~ $ gt shortcut1
+//! /path/to/a/dir $ gt shortcut2
+//! /snd/path/to/dir $ gt -pop
+//! /path/to/a/dir $
+//! ```
+//! ### Code
+//! ```bash
+//! ~ $ gt -code shortcut1     // Opens vscode in /new/path/to/dir
+//! /path/to/a/dir $           // Add -still to avoid changing directory
+//! ````
 
-</span><span class="comment">// use core::iter;
-</span><span class="kw">use </span><span class="kw">crate</span>::global::{Cmd, ToCmd};
+</span><span class="kw">use </span>regex::Regex;
+<span class="kw">use </span><span class="kw">crate</span>::global::{Cmd, ToCmd};
 <span class="kw">use </span>std::collections;
 <span class="kw">use </span>std::env;
-<span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::process;
 
 <span class="doccomment">/// This module contains the functions to push and pop directories from the history file.
@@ -276,82 +355,53 @@
     </span>incr: u32,
     <span class="doccomment">/// Gives the number of arguments for each supported command (except the basic `goto` command that can take 0, 1 or 2 arguments).
     </span>argcs: collections::HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">'global </span>str, usize&gt;,
-    aliass: collections::HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">'global </span>str, <span class="kw-2">&amp;</span><span class="lifetime">'global </span>str&gt;,
+    <span class="doccomment">/// `true` if the OS is unix, `false` if the OS is windows
+    </span>unix: bool,
+    <span class="doccomment">/// Gives the alias of each supported command
+    </span>aliass: collections::HashMap&lt;<span class="kw-2">&amp;</span><span class="lifetime">'global </span>str, <span class="kw-2">&amp;</span><span class="lifetime">'global </span>str&gt;,
+    <span class="doccomment">/// Gives the arguments that don't require reading `lib/dirs.csv`.
+    </span>no_read: [<span class="kw-2">&amp;</span><span class="lifetime">'global </span>str; <span class="number">5</span>],
 }
 
 <span class="doccomment">/// Default implementation for `GlobalData`
 </span><span class="kw">impl</span>&lt;<span class="lifetime">'global</span>&gt; Default <span class="kw">for </span>GlobalData&lt;<span class="lifetime">'global</span>&gt; {
     <span class="kw">fn </span>default() -&gt; <span class="self">Self </span>{
         <span class="kw">let </span><span class="kw-2">mut </span>argcs = collections::HashMap::new();
-        argcs.insert(<span class="string">"add"</span>, <span class="number">2</span>);
-        argcs.insert(<span class="string">"remove"</span>, <span class="number">1</span>);
-        argcs.insert(<span class="string">"delete"</span>, <span class="number">1</span>);
-        argcs.insert(<span class="string">"edit"</span>, <span class="number">2</span>);
-        argcs.insert(<span class="string">"reset"</span>, <span class="number">0</span>);
-        argcs.insert(<span class="string">"clear"</span>, <span class="number">0</span>);
-        argcs.insert(<span class="string">"state"</span>, <span class="number">0</span>);
-        argcs.insert(<span class="string">"decrement"</span>, <span class="number">1</span>);
-        argcs.insert(<span class="string">"pop"</span>, <span class="number">0</span>);
+        argcs.insert(<span class="string">"-add"</span>, <span class="number">2</span>);
+        argcs.insert(<span class="string">"-remove"</span>, <span class="number">1</span>);
+        argcs.insert(<span class="string">"-delete"</span>, <span class="number">1</span>);
+        argcs.insert(<span class="string">"-edit"</span>, <span class="number">2</span>);
+        argcs.insert(<span class="string">"-reset"</span>, <span class="number">0</span>);
+        argcs.insert(<span class="string">"-del"</span>, <span class="number">1</span>);
+        argcs.insert(<span class="string">"-decrement"</span>, <span class="number">1</span>);
 
         <span class="kw">let </span><span class="kw-2">mut </span>aliass = collections::HashMap::new();
-        aliass.insert(<span class="string">"a"</span>, <span class="string">"a"</span>);
-        aliass.insert(<span class="string">"rm"</span>, <span class="string">"remove"</span>);
-        aliass.insert(<span class="string">"d"</span>, <span class="string">"delete"</span>);
-        aliass.insert(<span class="string">"e"</span>, <span class="string">"edit"</span>);
-        aliass.insert(<span class="string">"res"</span>, <span class="string">"reset"</span>);
-        aliass.insert(<span class="string">"c"</span>, <span class="string">"clear"</span>);
-        aliass.insert(<span class="string">"?"</span>, <span class="string">"state"</span>);
-        aliass.insert(<span class="string">"dec"</span>, <span class="string">"decrement"</span>);
-        aliass.insert(<span class="string">"p"</span>, <span class="string">"pop"</span>);
+        aliass.insert(<span class="string">"-a"</span>, <span class="string">"-add"</span>);
+        aliass.insert(<span class="string">"-rm"</span>, <span class="string">"-remove"</span>);
+        aliass.insert(<span class="string">"-del"</span>, <span class="string">"-delete"</span>);
+        aliass.insert(<span class="string">"-decr"</span>, <span class="string">"-decrement"</span>);
+        aliass.insert(<span class="string">"-p"</span>, <span class="string">"-pop"</span>);
+        aliass.insert(<span class="string">"?"</span>, <span class="string">"-state"</span>);
+        aliass.insert(<span class="string">"-nc"</span>, <span class="string">"-noclear"</span>);
+        aliass.insert(<span class="string">"-c"</span>, <span class="string">"-code"</span>);
+        aliass.insert(<span class="string">"-cls"</span>, <span class="string">"-clear"</span>);
+        aliass.insert(<span class="string">"-g"</span>, <span class="string">"-get"</span>);
+        aliass.insert(<span class="string">"!"</span>, <span class="string">"-noclear"</span>);
+        aliass.insert(<span class="string">"#"</span>, <span class="string">"-still"</span>);
+        aliass.insert(<span class="string">"-cls"</span>, <span class="string">"-clear"</span>);
 
-        <span class="kw">let </span>dirs = <span class="kw">if </span><span class="macro">cfg!</span>(target_os = <span class="string">"windows"</span>) {
-            <span class="string">"w:/files/dev/rust/goto/lib/dirs.csv"
-        </span>} <span class="kw">else if </span><span class="macro">cfg!</span>(target_os = <span class="string">"linux"</span>) {
-            <span class="string">"/mnt/w/files/dev/rust/goto/lib/dirs.csv"
-        </span>} <span class="kw">else </span>{
-            <span class="macro">panic!</span>(<span class="string">"Unsupported OS"</span>);
-        };
-
-        <span class="kw">let </span>hist = <span class="kw">if </span><span class="macro">cfg!</span>(target_os = <span class="string">"windows"</span>) {
-            <span class="string">"w:/files/dev/rust/goto/lib/hist.csv"
-        </span>} <span class="kw">else if </span><span class="macro">cfg!</span>(target_os = <span class="string">"linux"</span>) {
-            <span class="string">"/mnt/w/files/dev/rust/goto/lib/hist.csv"
-        </span>} <span class="kw">else </span>{
-            <span class="macro">panic!</span>(<span class="string">"Unsupported OS"</span>);
-        };
+        <span class="kw">let </span>unix = <span class="macro">cfg!</span>(target_os = <span class="string">"linux"</span>);
+        <span class="macro">assert!</span>(unix || <span class="macro">cfg!</span>(target_os = <span class="string">"windows"</span>), <span class="string">"Unsupported OS"</span>);
 
         <span class="self">Self </span>{
-            dirs,
-            hist,
+            dirs: <span class="kw">if </span>unix {<span class="string">"/mnt/w/files/dev/rust/goto/lib/dirs.csv" </span>} <span class="kw">else  </span>{<span class="string">"w:/files/dev/rust/goto/lib/dirs.csv" </span>},
+            hist: <span class="kw">if </span>unix {<span class="string">"/mnt/w/files/dev/rust/goto/lib/hist.csv" </span>} <span class="kw">else  </span>{<span class="string">"w:/files/dev/rust/goto/lib/hist.csv" </span>},
             incr: <span class="number">10</span>,
+            unix,
             argcs,
             aliass,
+            no_read: [<span class="string">"-noclear"</span>, <span class="string">"-code"</span>, <span class="string">"-still"</span>, <span class="string">"-pop"</span>, <span class="string">"-state"</span>],
         }
-    }
-}
-
-<span class="doccomment">/// Advance the iterator by `n` steps.
-/// # Arguments
-/// * `iter` - The iterator to advance
-/// * `n` - The number of steps to advance
-/// # Example
-/// ```
-/// let mut iter = vec!["a", "b", "c"].into_iter();
-/// advance_by(&amp;mut iter, 2);
-/// assert_eq!(iter.next(), Some("c"));
-/// ```
-/// # Panics
-/// If the iterator does not have enough elements to advance by `n` steps.
-/// # Note
-/// This function is used to advance the iterator after reading the arguments of a command.
-/// It is used to avoid the use of `iter.nth(n).expect("message")` that would panic if the iterator does not have enough elements.
-///
-</span><span class="kw">fn </span>advance_by&lt;I&gt;(<span class="kw-2">mut </span>iter: I, n: usize)
-<span class="kw">where
-    </span>I: Iterator&lt;Item = String&gt;,
-{
-    <span class="kw">for _ in </span><span class="number">0</span>..n {
-        iter.next();
     }
 }
 
@@ -371,18 +421,16 @@
 /// This function is used to find the path of the directory to go to, and to update the usage of the directory if the command is valid.
 /// The function also prints the path of the directory to go to, and calls the `code` function to open the directory in Visual Studio Code.
 /// The function also calls the `clear` function to clear the terminal, unless the `noclear` argument is present.
-</span><span class="kw">fn </span>find_path(dirs: <span class="kw-2">&amp;</span>str, hist: <span class="kw-2">&amp;</span>str, args: <span class="kw-2">&amp;</span>[String], incr: u32) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+</span><span class="kw">fn </span>no_read(dirs: <span class="kw-2">&amp;</span>str, hist: <span class="kw-2">&amp;</span>str, args2: <span class="kw-2">&amp;</span>[String]) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+    <span class="kw">let </span><span class="kw-2">mut </span>res = <span class="prelude-val">None</span>;
     <span class="attr">#[rustfmt::skip]
-    </span><span class="kw">match </span>args.first().expect(<span class="string">"No command found"</span>).as_str() {
-        <span class="string">"add" </span>| <span class="string">"delete" </span>| <span class="string">"remove" </span>| <span class="string">"edit" </span>| <span class="string">"reset" </span>| <span class="string">"decrement"  </span>| <span class="string">"get" </span>=&gt; {
-            dirs::read(dirs, args, incr)
-        }
-        <span class="string">"clear" </span>=&gt; { fs::write(dirs, <span class="string">""</span>).unwrap_or_else(|er| <span class="macro">panic!</span>(<span class="string">"Unable to write file: {er}"</span>)); <span class="prelude-val">None </span>}
-        <span class="attr">#[allow(clippy::print_stdout)]
-        </span><span class="string">"state" </span>=&gt; dirs::state(dirs),
-        <span class="string">"pop" </span>=&gt; <span class="prelude-val">Some</span>(hist::popd(hist)),
-        name =&gt; <span class="macro">panic!</span>(<span class="string">"Invalid command {name} in &lt;{}&gt;"</span>, args.join(<span class="string">" "</span>)),
-    }
+    </span>args2.iter().for_each(|arg| <span class="kw">match </span>arg.as_str() {
+        <span class="string">"-pop" </span>=&gt; res = <span class="prelude-val">Some</span>(hist::popd(hist)),
+        <span class="string">"-state" </span>=&gt; dirs::state(dirs),
+        <span class="string">"-code" </span>| <span class="string">"-noclear" </span>| <span class="string">"-still" </span>=&gt; (),
+        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Invalid command &lt;{}&gt; in &lt;{}&gt;"</span>, arg, env::args().collect::&lt;Vec&lt;String&gt;&gt;().join(<span class="string">" "</span>)),
+    });
+    res
 }
 
 <span class="doccomment">/// Open the directory in Visual Studio Code.
@@ -395,7 +443,7 @@
 /// The function panics if the `code` command is not found.
 /// The function is called after finding the path of the directory to go to, and after updating the usage of the directory.
 ///
-</span><span class="kw">fn </span>code(args2: <span class="kw-2">&amp;</span>[String], path: <span class="kw-2">&amp;</span>String) {
+</span><span class="kw">fn </span>code(args2: <span class="kw-2">&amp;</span>[String], path: <span class="kw-2">&amp;</span>str) {
     <span class="kw">if </span>args2.contains(<span class="kw-2">&amp;</span>String::from(<span class="string">"code"</span>)) {
         process::Command::new(<span class="string">"code"</span>)
             .arg(path)
@@ -419,73 +467,93 @@
 /// The function is also used to check that the number of arguments of the command is valid.
 /// The function is also used to separate the arguments of the command that are not part of the command.
 ///
-</span><span class="attr">#[rustfmt::skip]
-</span><span class="kw">fn </span>get_args(argcs: <span class="kw-2">&amp;</span>collections::HashMap&lt;<span class="kw-2">&amp;</span>str, usize&gt;, aliass: <span class="kw-2">&amp;</span>collections::HashMap&lt;<span class="kw-2">&amp;</span>str, <span class="kw-2">&amp;</span>str&gt;) -&gt; (Vec&lt;Cmd&gt;, Vec&lt;String&gt;, bool) {
+</span><span class="comment">// #[rustfmt::skip]
+</span><span class="kw">fn </span>get_args(gdata: <span class="kw-2">&amp;</span>GlobalData) -&gt; (Vec&lt;Cmd&gt;, Vec&lt;String&gt;, bool) {
     <span class="kw">let </span><span class="kw-2">mut </span>cmdline = env::args().skip(<span class="number">1</span>);
     <span class="kw">let </span><span class="kw-2">mut </span>args1: Vec&lt;Cmd&gt; = <span class="macro">vec!</span>[];
     <span class="kw">let </span><span class="kw-2">mut </span>args2: Vec&lt;String&gt; = <span class="macro">vec!</span>[];
     <span class="kw">let </span><span class="kw-2">mut </span>get = <span class="bool-val">false</span>;
     <span class="kw">let </span><span class="kw-2">mut </span>last: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
 
-    <span class="attr">#[rustfmt::skip]
-    </span><span class="kw">loop </span>{
-        <span class="macro">dbg!</span>(<span class="kw-2">&amp;</span>cmdline, <span class="kw-2">&amp;</span>args1);
-        <span class="macro">println!</span>(<span class="string">"a"</span>);
-        <span class="kw">match </span>cmdline.next() {
+    <span class="kw">loop </span>{
+        <span class="macro">dbg!</span>(<span class="kw-2">&amp;</span>args1, <span class="kw-2">&amp;</span>args2);
+        <span class="kw">let </span>temp = cmdline.next();
+        <span class="macro">dbg!</span>(<span class="kw-2">&amp;</span>temp);
+        <span class="kw">match </span>temp {
             <span class="prelude-val">None </span>=&gt; <span class="kw">break</span>,
-            <span class="prelude-val">Some</span>(arg) =&gt; <span class="kw">match </span>argcs.get(aliass.get(arg.as_str()).unwrap_or(<span class="kw-2">&amp;</span>arg.as_str())) {
+            <span class="prelude-val">Some</span>(arg) =&gt; {
+                <span class="kw">let </span>curr = (<span class="kw-2">*</span>gdata.aliass.get(arg.as_str())
+                                    .unwrap_or(<span class="kw-2">&amp;</span>arg.as_str())).to_owned();
+                <span class="macro">dbg!</span>(<span class="kw-2">&amp;</span>curr);
 
-                <span class="prelude-val">Some</span>(value) =&gt; {
-                    <span class="macro">assert!</span>(cmdline.len() &gt;= <span class="kw-2">*</span>value, <span class="string">"Missing argument of {} in &lt;{}&gt;"</span>, <span class="kw-2">&amp;</span>arg, env::args().collect::&lt;Vec&lt;String&gt;&gt;().join(<span class="string">" "</span>));
-                    last = <span class="prelude-val">Some</span>(arg.clone());
-                    args1.push(arg.clone().to_cmd());
-                    advance_by(<span class="kw-2">&amp;mut </span>cmdline, <span class="kw-2">*</span>value);
-                },
+                <span class="attr">#[rustfmt::skip]
+                </span><span class="kw">match </span>gdata.argcs.get(curr.as_str()) {
+                    <span class="prelude-val">Some</span>(value) =&gt; {
+                        <span class="macro">assert!</span>(cmdline.len() &gt;= <span class="kw-2">*</span>value, 
+                                <span class="string">"Missing argument of {} in &lt;{}&gt;"</span>, 
+                                <span class="kw-2">&amp;</span>curr, env::args().collect::&lt;Vec&lt;String&gt;&gt;().join(<span class="string">" "</span>)
+                        );
+                        last = <span class="prelude-val">Some</span>(curr.clone());
+                        args1.push(curr.to_cmd().unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"{err}"</span>)));
+                    }
 
-                <span class="prelude-val">None </span>=&gt; <span class="kw">match </span>arg.as_str() {
-                    <span class="string">"features" </span>=&gt; <span class="kw">break</span>,
-                    <span class="string">"noclear" </span>| <span class="string">"code" </span>| <span class="string">"still" </span>=&gt; args2.push(arg),
-                    
-                    <span class="string">"get" </span>=&gt; { get = <span class="bool-val">true</span>; args1.push(arg.to_cmd()); }
-                    <span class="string">"goto" </span>=&gt; { last = <span class="prelude-val">Some</span>(String::from(<span class="string">"get"</span>)); args1.push(<span class="string">"get"</span>.to_cmd()); }
-
-                    name =&gt; <span class="kw">match </span>last {
-                        <span class="prelude-val">None </span>=&gt; { args1.push(<span class="string">"get"</span>.to_cmd());
-                                  args1.last()[<span class="number">1</span>] = (String::from(name));
-                                  last = <span class="prelude-val">Some</span>(String::from(<span class="string">"get"</span>)); }
-                        <span class="prelude-val">Some</span>(<span class="kw-2">ref </span>last_cmd) <span class="kw">if </span>last_cmd == <span class="string">"get" </span>=&gt; args1.push(name.to_cmd()),
-                        <span class="prelude-val">Some</span>(last_cmd) =&gt; <span class="macro">panic!</span>(<span class="string">"Too many arguments of &lt;{}&gt; in &lt;{}&gt;"</span>, last_cmd, env::args().collect::&lt;Vec&lt;String&gt;&gt;().join(<span class="string">" "</span>)),
-                    },
-                },
-            }
-        }
+                    <span class="prelude-val">None </span>=&gt; <span class="kw">match </span>curr.as_str() {
+                        <span class="string">"features" </span>=&gt; <span class="kw">break</span>,
+                        <span class="string">"-get" </span>=&gt; { last = <span class="prelude-val">Some</span>(String::from(<span class="string">"-get"</span>)); 
+                                    get = <span class="bool-val">true</span>; 
+                                    args1.push(curr.to_cmd().unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"{err}"</span>))); }
+                        <span class="comment">// Is a no-read command (code, clear, still, pop, state, noclear, etc.)
+                        </span><span class="kw">_ if </span>gdata.no_read.contains(<span class="kw-2">&amp;</span>curr.as_str()) =&gt; args2.push(curr.clone()),
+                        <span class="kw">_ if </span>last.is_none() =&gt; { args1.push(Cmd::Get([<span class="prelude-val">Some</span>(curr.clone()), <span class="prelude-val">None</span>])); 
+                                                 last = <span class="prelude-val">Some</span>(String::from(<span class="string">"-get"</span>)); }
+                        <span class="comment">// _ if last.as_ref().expect("Last isn't none") == "-get" =&gt; {
+                        </span><span class="kw">_  </span>=&gt; args1.last_mut().unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"Invalid command &lt;{}&gt; in &lt;{}&gt;"</span>,
+                                                                        curr, env::args().collect::&lt;Vec&lt;String&gt;&gt;().join(<span class="string">" "</span>))).append(curr),
+                        
+                        <span class="comment">// _ =&gt; { panic!("Invalid command &lt;{}&gt; in &lt;{}&gt;", curr, env::args().collect::&lt;Vec&lt;String&gt;&gt;().join(" ")); },
+                    </span>},
+                }
+            },
+        };
     }
 
     <span class="kw">if </span>args1.is_empty() {
-        args1.push(String::from(<span class="string">"get"</span>));
+        args1.push(Cmd::default());
     }
+
     (args1, args2, get)
 }
 
 <span class="comment">///////////////////////////////: main functions  :///////////////////////////////
 
 </span><span class="kw">fn </span>main() {
-    <span class="kw">let </span>global = GlobalData::default();
-    <span class="kw">let </span>(args, args2, get) = get_args(<span class="kw-2">&amp;</span>global.argcs, <span class="kw-2">&amp;</span>global.aliass);
-    <span class="macro">dbg_print!</span>(<span class="string">"&gt;&gt;&gt; &lt;{}&gt; with &lt;{}&gt;\n"</span>, args.join(<span class="string">" "</span>), args2.join(<span class="string">" "</span>));
-    <span class="macro">dbg!</span>(<span class="kw-2">&amp;</span>args);
-    <span class="attr">#[rustfmt::skip]
-    #[allow(clippy::print_stdout)]
-    </span><span class="kw">let </span>path = find_path(global.dirs, global.hist, <span class="kw-2">&amp;</span>args, global.incr);
-    <span class="kw">if let </span><span class="prelude-val">Some</span>(found) = <span class="kw-2">&amp;</span>path {
-        hist::pushd(global.hist, found);
+    <span class="kw">let </span>gdata = GlobalData::default();
+    <span class="kw">let </span>(args1, args2, get) = get_args(<span class="kw-2">&amp;</span>gdata);
+    <span class="macro">dbg_print!</span>(<span class="string">"&gt;&gt;&gt; &lt;{:?}&gt; with &lt;{:?}&gt;\n"</span>, args1, args2);
+    <span class="kw">let </span>path  = dirs::read(gdata.dirs, <span class="kw-2">&amp;</span>args1, gdata.incr);
+    <span class="kw">let </span>os_path: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="kw">if </span>gdata.unix {
+        <span class="kw">let </span>re = Regex::new(<span class="string">"(?i)[a-z]:"</span>).unwrap_or_else(|err| <span class="macro">panic!</span>(<span class="string">"Could't get regex: {err}"</span>));
+        path.map(|pat| re.replace(<span class="kw-2">&amp;</span>pat, |caps: <span class="kw-2">&amp;</span>regex::Captures| {
+            <span class="kw">let </span>match_str = caps.get(<span class="number">0</span>).expect(<span class="string">"Couldn't windows match pattern in path"</span>).as_str();
+            <span class="macro">format!</span>(<span class="string">"/mnt/{}/"</span>, match_str.to_lowercase())
+        }).to_string())
+            
+    } <span class="kw">else </span>{path};
+
+    <span class="kw">if let </span><span class="prelude-val">Some</span>(found) = <span class="kw-2">&amp;</span>os_path {
+        hist::pushd(gdata.hist, found);
         code(<span class="kw-2">&amp;</span>args2, found);
     };
+
+    no_read(gdata.dirs, gdata.hist, <span class="kw-2">&amp;</span>args2);
+
+    <span class="attr">#[allow(clippy::print_stdout)]
+    </span>{
     <span class="macro">print!</span>(
         <span class="string">"{}#{}#{}"</span>,
-        u8::from(!args2.contains(<span class="kw-2">&amp;</span>String::from(<span class="string">"noclear"</span>))),
+        u8::from(!args2.contains(<span class="kw-2">&amp;</span>String::from(<span class="string">"-noclear"</span>))),
         u8::from(get),
-        path.unwrap_or_default()
-    );
+        os_path.unwrap_or_default()
+    );};
 }
 </code></pre></div></section></main></body></html>
