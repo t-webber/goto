@@ -75,7 +75,7 @@
 <a href="#73" id="73">73</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>std::fs;
 <span class="kw">use </span>std::process;
-<span class="kw">use </span>std::time::{SystemTime, UNIX_EPOCH};
+<span class="kw">use </span>std::time;
 <span class="comment">// Imports
 
 </span><span class="doccomment">/// Push a directory to the history file.
@@ -100,7 +100,7 @@
     fs::write(histpath,<span class="macro">format!</span>(<span class="string">"{}\n{path};{};{}"</span>,
         fs::read_to_string(histpath).unwrap_or_else(|er| <span class="macro">panic!</span>(<span class="string">"Unable to read hist file: {er}"</span>)).trim(),
         process::id(),
-        SystemTime::now().duration_since(UNIX_EPOCH).expect(<span class="string">"Time went backwards"</span>).as_secs(),
+        time::SystemTime::now().duration_since(time::UNIX_EPOCH).expect(<span class="string">"Time went backwards"</span>).as_secs(),
     ))
     .unwrap_or_else(|er| <span class="macro">panic!</span>(<span class="string">"Unable to write hist file {er}"</span>));
 }

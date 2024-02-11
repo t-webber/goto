@@ -402,9 +402,35 @@
 <a href="#400" id="400">400</a>
 <a href="#401" id="401">401</a>
 <a href="#402" id="402">402</a>
+<a href="#403" id="403">403</a>
+<a href="#404" id="404">404</a>
+<a href="#405" id="405">405</a>
+<a href="#406" id="406">406</a>
+<a href="#407" id="407">407</a>
+<a href="#408" id="408">408</a>
+<a href="#409" id="409">409</a>
+<a href="#410" id="410">410</a>
+<a href="#411" id="411">411</a>
+<a href="#412" id="412">412</a>
+<a href="#413" id="413">413</a>
+<a href="#414" id="414">414</a>
+<a href="#415" id="415">415</a>
+<a href="#416" id="416">416</a>
+<a href="#417" id="417">417</a>
+<a href="#418" id="418">418</a>
+<a href="#419" id="419">419</a>
+<a href="#420" id="420">420</a>
+<a href="#421" id="421">421</a>
+<a href="#422" id="422">422</a>
+<a href="#423" id="423">423</a>
+<a href="#424" id="424">424</a>
+<a href="#425" id="425">425</a>
+<a href="#426" id="426">426</a>
 </pre></div><pre class="rust"><code><span class="kw">use </span>core::fmt::Write;
 <span class="kw">use </span>std::fs;
+<span class="kw">use </span>std::process;
 
+<span class="kw">use </span><span class="kw">crate</span>::global::Cmd;
 <span class="kw">use </span><span class="kw">crate</span>::user_error;
 <span class="comment">// Imports
 
@@ -613,13 +639,19 @@
     }
 }
 
-<span class="kw">fn </span>std_path(path: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>String&gt;) -&gt; String {
-    <span class="kw">let </span>temp = path
-        .expect(<span class="string">"Path not found in command line"</span>)
-        .replace(<span class="string">'\\'</span>, <span class="string">"/"</span>);
-    temp.strip_suffix(<span class="string">'/'</span>)
-        .map_or(temp.as_str(), |trimed| trimed)
-        .to_string()
+<span class="doccomment">/// Function to format a path
+/// # Arguments
+/// * `path` - The path to format
+/// # Returns
+/// The formatted path
+/// # Example   
+/// ```
+/// assert!(std_path(&amp;Some(String::from("/home/user/folder/"))) == "/home/user/folder");
+/// ```
+///
+</span><span class="kw">fn </span>std_path(path: <span class="kw-2">&amp;</span><span class="prelude-ty">Option</span>&lt;String&gt;) -&gt; String {
+    <span class="kw">let </span>somepath = path.as_ref().expect(<span class="string">"Path not found in command line"</span>);
+    somepath.strip_suffix(<span class="string">'/'</span>).unwrap_or(somepath).to_owned()
 }
 
 <span class="comment">///////////////////////////////: command keywords functions  :///////////////////////////////
@@ -645,7 +677,7 @@
 /// If the command is invalid
 /// 
 </span><span class="attr">#[rustfmt::skip]
-</span><span class="kw">fn </span>read_dline( rdline: <span class="kw-2">&amp;</span>str, args: <span class="kw-2">&amp;</span>[String], success: <span class="kw-2">&amp;mut </span>bool, incr: u32, sstate: <span class="kw-2">&amp;mut </span>SearchState ) -&gt; String {
+</span><span class="kw">fn </span>read_dline( rdline: <span class="kw-2">&amp;</span>str, args: <span class="kw-2">&amp;</span>[Cmd], success: <span class="kw-2">&amp;mut </span>bool, incr: u32, sstate: <span class="kw-2">&amp;mut </span>SearchState ) -&gt; String {
 
     <span class="kw">if </span><span class="kw-2">*</span>success {
         <span class="kw">if </span>rdline.trim().is_empty() {
@@ -670,33 +702,28 @@
         };
 
         <span class="attr">#[rustfmt::skip]
-        </span><span class="kw">let </span>line2: String = <span class="kw">match </span>args.first().expect(<span class="string">"Found empty line in dirs"</span>).as_str() {
-            <span class="string">"get" </span><span class="kw">if </span>args.get(<span class="number">1</span>).unwrap_or(<span class="kw-2">&amp;</span>String::new()).is_empty() =&gt; get(<span class="kw-2">&amp;</span>dirline, success, sstate, <span class="string">""</span>),
-            <span class="string">"get" </span>=&gt; get(<span class="kw-2">&amp;</span>dirline, success, sstate, args.get(<span class="number">1</span>).expect(<span class="string">"No shortcut found in get command"</span>)),
-            <span class="string">"reset" </span>=&gt; <span class="macro">format!</span>(
+        </span><span class="kw">let </span>line2: String = <span class="kw">match </span>args.first().expect(<span class="string">"Found empty line in dirs"</span>) {
+            Cmd::Get([shortc, <span class="kw">_</span>]) <span class="kw">if </span>shortc.is_none() =&gt; get(<span class="kw-2">&amp;</span>dirline, success, sstate, <span class="string">""</span>),
+            Cmd::Get([shortc, <span class="kw">_</span>]) =&gt; get(<span class="kw-2">&amp;</span>dirline, success, sstate, shortc.as_ref().expect(<span class="string">"No shortcut found in get command"</span>)),
+            Cmd::Reset =&gt; <span class="macro">format!</span>(
                 <span class="string">"{};{}"</span>,
-                vecline[<span class="number">0</span>..vecline.len()-<span class="number">1</span>].join(<span class="string">";"</span>),
+                vecline.get(<span class="number">0</span>..vecline.len().checked_sub(<span class="number">1</span>).expect(<span class="string">"VLine was empty"</span>)).expect(<span class="string">"vecline was empty"</span>).join(<span class="string">";"</span>),
                 <span class="number">0
             </span>),
-            <span class="string">"decrement" </span>=&gt; <span class="macro">format!</span>(
+            Cmd::Decr(decr) =&gt; <span class="macro">format!</span>(
                 <span class="string">"{};{}"</span>,
-                vecline.join(<span class="string">";"</span>),
-                priory.checked_sub(args.get(<span class="number">1</span>).expect(<span class="string">"No decrement value found"</span>).parse::&lt;u32&gt;().expect(<span class="string">"Decrement value not an integer"</span>)).expect(<span class="string">"Overflow on priority"</span>)),
-            <span class="string">"clear" </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Internal error : success panic in line reading"</span>),
+                vecline.get(<span class="number">0</span>..vecline.len().checked_sub(<span class="number">1</span>).expect(<span class="string">"Invalid format of line"</span>)).expect(<span class="string">"Format of line not valid"</span>).join(<span class="string">";"</span>),
+                priory.saturating_sub(<span class="kw-2">*</span>decr)),
 
-            name <span class="kw">if </span>args.get(<span class="number">1</span>).unwrap_or(<span class="kw-2">&amp;</span>String::new()).is_empty() =&gt; <span class="macro">panic!</span>(<span class="string">"{name} expected an argument, but none where given."</span>),
+            Cmd::Rm(shortc) =&gt; remove(<span class="kw-2">&amp;</span>dirline, success, shortc),
+            Cmd::Del(path) =&gt; <span class="kw">if </span><span class="kw-2">*</span>dirline.path == <span class="kw-2">*</span>path { <span class="kw-2">*</span>success = <span class="bool-val">true</span>; <span class="kw">return </span>String::new() } 
+                                       <span class="kw">else </span>{ dirline.join(<span class="string">";"</span>) },
 
-            <span class="string">"remove" </span>=&gt; remove(<span class="kw-2">&amp;</span>dirline, success, args.get(<span class="number">1</span>).expect(<span class="string">"Remove expected an argument, but none where found."</span>)),
-            <span class="string">"delete" </span>=&gt; <span class="kw">if </span>dirline.path == args.get(<span class="number">1</span>).expect(<span class="string">"Delete exepected an argument, but none where given."</span>) { <span class="kw-2">*</span>success = <span class="bool-val">true</span>; <span class="kw">return </span>String::new() } 
-                        <span class="kw">else </span>{ dirline.join(<span class="string">";"</span>) },
+            Cmd::Add([shortc, path]) =&gt; add(<span class="kw-2">&amp;</span>dirline, success, shortc.as_ref().expect(<span class="string">"Second argument expected to add"</span>).as_str(), <span class="kw-2">&amp;</span>std_path(path)),
+            Cmd::Edit([shortc, path]) =&gt; edit(<span class="kw-2">&amp;</span>dirline, success, shortc.as_ref().expect(<span class="string">"Second argument expected to edit"</span>).as_str(), <span class="kw-2">&amp;</span>std_path(path)),
 
-            name <span class="kw">if </span>args.get(<span class="number">2</span>).unwrap_or(<span class="kw-2">&amp;</span>String::new()).is_empty() =&gt; <span class="macro">panic!</span>(<span class="string">"{name} expected a second argument, but only one was found."</span>),
-
-            <span class="string">"add" </span>=&gt; add(<span class="kw-2">&amp;</span>dirline, success, args.get(<span class="number">1</span>).expect(<span class="string">"Second argument expected to add"</span>), <span class="kw-2">&amp;</span>std_path(args.get(<span class="number">2</span>))),
-            <span class="string">"edit" </span>=&gt; edit(<span class="kw-2">&amp;</span>dirline, success, args.get(<span class="number">1</span>).expect(<span class="string">"Second argument expected to add"</span>), <span class="kw-2">&amp;</span>std_path(args.get(<span class="number">2</span>))),
-
-            <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Invalid command : {}"</span>, args.join(<span class="string">" "</span>)),
-        };
+            <span class="comment">// _ =&gt; panic!("Invalid command : {:?}", args),
+        </span>};
 
         <span class="kw">if </span>line2.is_empty() { String::new() }
         <span class="kw">else </span>{ <span class="macro">format!</span>(<span class="string">"{line2}\n"</span>) }
@@ -719,7 +746,7 @@
 /// # Panics
 /// If the file is not found
 ///
-</span><span class="kw">pub fn </span>read(dirspath: <span class="kw-2">&amp;</span>str, args: <span class="kw-2">&amp;</span>[String], incr: u32) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+</span><span class="kw">pub fn </span>read(dirspath: <span class="kw-2">&amp;</span>str, args: <span class="kw-2">&amp;</span>[Cmd], incr: u32) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
     <span class="kw">let </span><span class="kw-2">mut </span>sstate = SearchState::default();
     <span class="kw">let </span><span class="kw-2">mut </span>success = <span class="bool-val">false</span>;
 
@@ -729,27 +756,41 @@
         .map(|dline| read_dline(dline.trim(), args, <span class="kw-2">&amp;mut </span>success, incr, <span class="kw-2">&amp;mut </span>sstate))
         .collect();
 
-    <span class="kw">let </span><span class="kw-2">mut </span>res: <span class="prelude-ty">Option</span>&lt;String&gt; = <span class="prelude-val">None</span>;
+    <span class="kw">let </span>temp = sstate
+        .correct
+        .clone()
+        .unwrap_or_else(|| sstate.prioritised.clone().unwrap_or_default());
+
+    <span class="kw">let </span><span class="kw-2">mut </span>res: String = temp;
 
     <span class="attr">#[rustfmt::skip]
-    </span><span class="kw">match </span>args.first().expect(<span class="string">"Args is empty but already checked"</span>).as_str() {
-        <span class="string">"get" </span><span class="kw">if </span>!success &amp;&amp; args.get(<span class="number">1</span>).unwrap_or(<span class="kw-2">&amp;</span>String::new()).is_empty() =&gt; res = <span class="prelude-val">Some</span>(sstate.prioritised.expect(<span class="string">"shortc invalid"</span>)),
-        <span class="string">"get" </span><span class="kw">if </span>!success =&gt; <span class="macro">panic!</span>(<span class="string">"shortc {} not found"</span>, args.get(<span class="number">1</span>).expect(<span class="string">"No shortcut found"</span>)),
-        <span class="string">"get" </span>=&gt; res = <span class="prelude-val">Some</span>(
-                sstate
-                    .correct
-                    .expect(<span class="string">"Internal: success is true but path not found"</span>),
-        ),
-        <span class="kw">_ if </span>success =&gt; (),
-        <span class="string">"reset" </span>| <span class="string">"decrement" </span>=&gt; (),
-        <span class="string">"add" </span>=&gt; <span class="macro">write!</span>(data, <span class="string">"{};{};0"</span>, std_path(args.get(<span class="number">2</span>)), args.get(<span class="number">1</span>).expect(<span class="string">"Missing shortcut to add"</span>)).unwrap_or_else(|er| <span class="macro">panic!</span>(<span class="string">"Unable to add line to data: {er}"</span>)),
-        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"Invalid commend line: {}"</span>, args.join(<span class="string">" "</span>)),
-    };
+    </span><span class="kw">for </span>arg <span class="kw">in </span>args { <span class="kw">match </span>arg {
+        Cmd::Get([shortc, path]) =&gt; {
+            <span class="kw">if </span>success || shortc.is_none() {
+                res = <span class="macro">format!</span>(<span class="string">"{}/{}"</span>, res, path.clone().unwrap_or_default());
+            } <span class="kw">else </span>{
+                <span class="macro">panic!</span>(<span class="string">"Shortcut {} not found."</span>, shortc.as_ref().expect(<span class="string">"No shortcut found in get command"</span>));
+            };
+            <span class="kw">return </span><span class="prelude-val">Some</span>(res);
+        }
 
+        <span class="kw">_ if </span>success =&gt; (),
+        Cmd::Reset | Cmd::Decr(<span class="kw">_</span>) =&gt; (),
+        Cmd::Add([shortc, path]) =&gt; <span class="macro">write!</span>(
+            data,
+            <span class="string">"{};{};0"</span>,
+            std_path(path),
+            shortc.as_ref().expect(<span class="string">"Missing shortcut to add"</span>)
+        )
+        .unwrap_or_else(|er| <span class="macro">panic!</span>(<span class="string">"Unable to add line to data: {er}"</span>)),
+
+        Cmd::Edit(<span class="kw">_</span>) | Cmd::Rm(<span class="kw">_</span>) | Cmd::Del(<span class="kw">_</span>) =&gt; <span class="macro">panic!</span>(<span class="string">"Invalid command line: {args:?}"</span>),
+    };
+}
     fs::write(dirspath, data).unwrap_or_else(|er| <span class="macro">panic!</span>(<span class="string">"Unable to write file: {er}"</span>));
 
-    res
-}
+    <span class="prelude-val">None
+</span>}
 
 <span class="doccomment">/// Function to print state of the directories
 /// # Arguments
@@ -771,16 +812,18 @@
 /// third       afirstshortcut           14
 /// ```
 ///
-</span><span class="kw">pub fn </span>state(dirspath: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+</span><span class="kw">pub fn </span>state(dirspath: <span class="kw-2">&amp;</span>str) -&gt; ! {
     <span class="kw">let </span><span class="kw-2">mut </span>spaces: Vec&lt;usize&gt; = <span class="macro">vec!</span>[];
     <span class="kw">let </span>binding = fs::read_to_string(dirspath)
         .unwrap_or_else(|er| <span class="macro">panic!</span>(<span class="string">"!State! Enable to read file! {er}"</span>));
     <span class="kw">let </span>data = binding.lines().collect::&lt;Vec&lt;<span class="kw-2">&amp;</span>str&gt;&gt;();
     <span class="kw">for </span>dline <span class="kw">in </span><span class="kw-2">&amp;</span>data {
         dline.split(<span class="string">';'</span>).enumerate().for_each(|(idx, elt)| {
-            <span class="kw">let </span>new = elt.len() + <span class="number">1</span>;
+            <span class="kw">let </span>new = elt.len().checked_add(<span class="number">1</span>).expect(<span class="string">"Overflow on space"</span>);
             <span class="kw">match </span>spaces.get(idx) {
-                <span class="prelude-val">Some</span>(space) <span class="kw">if </span>new &gt; <span class="kw-2">*</span>space =&gt; <span class="kw-2">*</span>spaces.get_mut(idx).unwrap() = new,
+                <span class="prelude-val">Some</span>(space) <span class="kw">if </span>new &gt; <span class="kw-2">*</span>space =&gt; {
+                    <span class="kw-2">*</span>spaces.get_mut(idx).expect(<span class="string">"Expected tab size"</span>) = new;
+                }
                 <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; (),
                 <span class="prelude-val">None </span>=&gt; spaces.push(new),
             };
@@ -801,7 +844,12 @@
         <span class="macro">writeln!</span>(state, <span class="string">"{str1:&lt;total_space$}{priory}"</span>)
             .unwrap_or_else(|er| <span class="macro">panic!</span>(<span class="string">"Unable to write to string: {er}"</span>));
     }
-    <span class="macro">print!</span>(<span class="string">"{state}"</span>);
-    std::process::exit(<span class="number">0</span>);
+
+    <span class="attr">#[allow(clippy::print_stdout)]
+    </span>{
+        <span class="macro">print!</span>(<span class="string">"{state}"</span>);
+    };
+    <span class="attr">#[allow(clippy::exit)]
+    </span>process::exit(<span class="number">0</span>);
 }
 </code></pre></div></section></main></body></html>
