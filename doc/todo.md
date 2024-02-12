@@ -1,5 +1,3 @@
-//BUG: gtc with 2 shortcuts
-
 //ADD: Print Help, Version, Errors
 //ADD: Backup
 //ADD: PopClear
@@ -8,3 +6,4 @@
 //ADD: Add with only one location add argument
 //ADD: Web option to open files
 //ADD: List of websites with aliases
+//ADD: Supported in cmd

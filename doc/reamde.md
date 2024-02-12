@@ -35,4 +35,5 @@ cp ./target/debug/goto* ./release
 
 3. Add the `release` folder to your `PATH` environment variable.
 
-- On a Unix based OS: `echo "export PATH=$(pwd)/release/:PATH" >> ~/.bashrc`
+   - On a Unix based OS: `echo "export PATH=$(pwd)/release/:PATH" >> ~/.bashrc`
+   - On Windows: `Environment Variables` (start menu) -> `Environment Variables` -> `Path` -> `Edit` -> `New` -> `C:\path\to\release`

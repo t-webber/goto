@@ -23,34 +23,36 @@
 //! In reality, the command will clear the terminal once the command has finished, but the examples are written as if the terminal was not cleared.
 //! ### Add
 //! ```bash
-//! ~ $ gt -add mydir /path/to/dir
-//! ~ $ gt mydir
-//! /path/to/dir $ gt -add mydir2 /path/to/dir
+//! ~ $ . gt -add mydir /path/to/dir
+//! ~ $ . gt mydir
+//! /path/to/dir $ . gt -add mydir2 /path/to/dir
 //! ~ $ cd /
-//! ~ $ gt mydir2
+//! ~ $ . gt mydir2
 //! /path/to/dir $ 
 //! ```
 //! ### Edit
 //! ```bash
-//! ~ $ gt -edit mydir /new/path/to/dir
-//! ~ $ gt mydir
-//! /new/path/to/dir $ gt -remove mydir
-//! /new/path/to/dir $ gt mydir // Error: mydir is not a valid shortcut
+//! ~ $ . gt -edit mydir /new/path/to/dir
+//! ~ $ . gt mydir
+//! /new/path/to/dir $ . gt -remove mydir
+//! /new/path/to/dir $ . gt mydir // Error: mydir is not a valid shortcut
 //! ```
 //! ### Pop
 //! ```bash
-//! ~ $ gt -add shortcut1 /path/to/a/dir
-//! ~ $ gt -add shortcut2 /snd/path/to/dir
-//! ~ $ gt shortcut1
-//! /path/to/a/dir $ gt shortcut2
-//! /snd/path/to/dir $ gt -pop
+//! ~ $ . gt -add shortcut1 /path/to/a/dir
+//! ~ $ . gt -add shortcut2 /snd/path/to/dir
+//! ~ $ . gt shortcut1
+//! /path/to/a/dir $ . gt shortcut2
+//! /snd/path/to/dir $ . gt -pop
 //! /path/to/a/dir $
 //! ```
 //! ### Code
 //! ```bash
-//! ~ $ gt -code shortcut1     // Opens vscode in /new/path/to/dir
+//! ~ $ . gt -code shortcut1     // Opens vscode in /new/path/to/dir
 //! /path/to/a/dir $           // Add -still to avoid changing directory
 //! ````
+//! # Note
+//! In powershell, you don't need to use the `.` before the command.
 
 use crate::global::{Cmd, ToCmd};
 use std::collections;

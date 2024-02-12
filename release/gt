@@ -1,36 +1,16 @@
+loc=/mnt/w/files/dev/rust/goto/release/goto
+res=$(eval "$loc $1 $2 $3 $4 $5 $6 $7 $8 $9")
 
-loc=$(dirname $0)
-res=$(eval "$loc/goto $1 $2 $3 $4 $5 $6 $7 $8 $9")
-res=$(echo $res | tr "#" "\n")
 clear=${res:0:1}
-get=${res:1:2}
-path=${res:3}
+get=${res:2:1}
+path=${res:4}
 
-if [[ $clear -eq ]]; then
+if [[ $clear -eq "1" ]]; then
     clear
 fi
 
 if [[ $get -eq "0" ]]; then
     cd $path
 else
-    return $path
+    echo $path
 fi
-
-
-# $res = $res -split '#'
-
-
-# if ($res.length -gt 3) {
-#   foreach ($line in $res) {
-#     Write-Host $line
-#   }
-# }
-
-# if ($res[1] -eq "0") {
-#   Set-Location $res[2]
-# } elseif ($res[1] -eq "1") {
-#   return $res[2]
-# }
-# if ($res[0] -eq "1") {
-#   Clear-Host
-# }
