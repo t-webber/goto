@@ -1,0 +1,2 @@
+x=$(eval "gt.ps1 -get $1 $2 $3 $4 $5")
+nautilus $x

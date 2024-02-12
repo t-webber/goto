@@ -1,1 +1,2 @@
-explorer.exe $(gt.ps1 -get $args)
+$x = Invoke-Expression "gt.ps1 -get $args"
+start $x

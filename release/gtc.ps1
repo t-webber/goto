@@ -1,1 +1,1 @@
-gt.ps1 -code $args
+Invoke-Expression "gt.ps1 -code $args"

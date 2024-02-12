@@ -23,36 +23,37 @@
 //! In reality, the command will clear the terminal once the command has finished, but the examples are written as if the terminal was not cleared.
 //! ### Add
 //! ```bash
-//! ~ $ gt -add mydir /path/to/dir
-//! ~ $ gt mydir
-//! /path/to/dir $ gt -add mydir2 /path/to/dir
+//! ~ $ . gt -add mydir /path/to/dir
+//! ~ $ . gt mydir
+//! /path/to/dir $ . gt -add mydir2 /path/to/dir
 //! ~ $ cd /
-//! ~ $ gt mydir2
+//! ~ $ . gt mydir2
 //! /path/to/dir $ 
 //! ```
 //! ### Edit
 //! ```bash
-//! ~ $ gt -edit mydir /new/path/to/dir
-//! ~ $ gt mydir
-//! /new/path/to/dir $ gt -remove mydir
-//! /new/path/to/dir $ gt mydir // Error: mydir is not a valid shortcut
+//! ~ $ . gt -edit mydir /new/path/to/dir
+//! ~ $ . gt mydir
+//! /new/path/to/dir $ . gt -remove mydir
+//! /new/path/to/dir $ . gt mydir // Error: mydir is not a valid shortcut
 //! ```
 //! ### Pop
 //! ```bash
-//! ~ $ gt -add shortcut1 /path/to/a/dir
-//! ~ $ gt -add shortcut2 /snd/path/to/dir
-//! ~ $ gt shortcut1
-//! /path/to/a/dir $ gt shortcut2
-//! /snd/path/to/dir $ gt -pop
+//! ~ $ . gt -add shortcut1 /path/to/a/dir
+//! ~ $ . gt -add shortcut2 /snd/path/to/dir
+//! ~ $ . gt shortcut1
+//! /path/to/a/dir $ . gt shortcut2
+//! /snd/path/to/dir $ . gt -pop
 //! /path/to/a/dir $
 //! ```
 //! ### Code
 //! ```bash
-//! ~ $ gt -code shortcut1     // Opens vscode in /new/path/to/dir
+//! ~ $ . gt -code shortcut1     // Opens vscode in /new/path/to/dir
 //! /path/to/a/dir $           // Add -still to avoid changing directory
 //! ````
+//! # Note
+//! In powershell, you don't need to use the `.` before the command.
 
-use regex::Regex;
 use crate::global::{Cmd, ToCmd};
 use std::collections;
 use std::env;
@@ -163,12 +164,13 @@ fn no_read(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
 /// The function is called after finding the path of the directory to go to, and after updating the usage of the directory.
 ///
 fn code(args2: &[String], path: &str) {
-    if args2.contains(&String::from("code")) {
-        process::Command::new("code")
+    if args2.contains(&String::from("-code")) {
+     process::Command::new("code")
             .arg(path)
             .spawn()
             .unwrap_or_else(|er| panic!("Unable to open code {er}"));
     }
+    // let _ = subprocesses.wait();
 }
 
 ///////////////////////////////: goto functions  :///////////////////////////////
@@ -240,23 +242,36 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
     (args1, args2, get)
 }
 
+/// Convers path to unix or dos
+/// 
+fn dos2unix(ipath: Option<String>, unix: bool) -> Option<String> {
+    ipath.map( |path| { 
+    let chars: Vec<char> = path.chars().collect();
+        if chars.get(1) == Some(&':') && unix {
+            let rest: String = chars.get(3..).unwrap_or_default().iter().collect();
+            format!("/mnt/{}/{}", chars.first().unwrap_or(&' '), rest)
+        } else if path.contains("wsl.localhost") && unix {
+            let index = path.find("wsl.localhost").unwrap_or(0);
+            path.get(index..).unwrap_or_default().to_owned()
+        } else if path.starts_with("/mnt/") && !unix {
+            let rest: String = chars.get(6..).unwrap_or_default().iter().collect();
+            format!("{}:{}", chars.get(5).unwrap_or(&'c'), rest)
+        } else {
+            path
+        }
+    })
+}
+
 ///////////////////////////////: main functions  :///////////////////////////////
 
 fn main() {
     let gdata = GlobalData::default();
     let (args1, args2, get) = get_args(&gdata);
-    dbg_print!(">>> <{:?}> with <{:?}>\n", args1, args2);
+    // dbg_print!(">>> <{:?}> with <{:?}>\n", args1, args2);
     let path  = dirs::read(gdata.dirs, &args1, gdata.incr);
-    let os_path: Option<String> = if gdata.unix {
-        let re = Regex::new("(?i)[a-z]:").unwrap_or_else(|err| panic!("Could't get regex: {err}"));
-        path.map(|pat| re.replace(&pat, |caps: &regex::Captures| {
-            let match_str = caps.get(0).expect("Couldn't windows match pattern in path").as_str();
-            format!("/mnt/{}/", match_str.to_lowercase())
-        }).to_string())
-            
-    } else {path};
+    let ospath = dos2unix(path, gdata.unix);
 
-    if let Some(found) = &os_path {
+    if let Some(found) = &ospath {
         hist::pushd(gdata.hist, found);
         code(&args2, found);
     };
@@ -269,6 +284,6 @@ fn main() {
         "{}#{}#{}",
         u8::from(!args2.contains(&String::from("-noclear"))),
         u8::from(get),
-        os_path.unwrap_or_default()
+        ospath.unwrap_or_default()
     );};
 }
