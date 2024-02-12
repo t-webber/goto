@@ -2,7 +2,7 @@ if (!$PSScriptRoot) {
   Write-Host "Goto cannot be used as executable."
 }
 
-$res = $( Invoke-Expression "$PSScriptRoot\..\build\win\debug\goto.exe $args" )
+$res = $( Invoke-Expression "$PSScriptRoot\goto.exe $args" )
 
 $res = $res -split '#'
 

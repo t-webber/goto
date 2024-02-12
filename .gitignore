@@ -6,6 +6,8 @@ doc/debug
 doc/.rust*
 debug/
 doc/CACHEDIR.TAG
-release/*.exe
+release/gt.exe
+release/gt
 release/gtc.ps1
 release/expl.ps1
+tools/

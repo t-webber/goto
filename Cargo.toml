@@ -19,5 +19,4 @@ homepage = "https://www.github.com/yourname/goto"
 regex = "1.5.4"
 
 [features]
-default = ["debug-print"]
 debug-print = []

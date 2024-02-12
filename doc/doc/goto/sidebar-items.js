@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["code","get_args","main","no_read"],"macro":["dbg_print","user_error"],"mod":["dirs","global","hist"],"struct":["GlobalData"]};
