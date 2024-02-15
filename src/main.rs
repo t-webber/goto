@@ -1,5 +1,5 @@
 // clippy::restriction,
-#![warn(clippy::all, clippy::pedantic, clippy::restriction, clippy::nursery, clippy::cargo)]
+#![warn(clippy::all, clippy::pedantic, clippy::nursery, clippy::cargo)]
 #![feature(stmt_expr_attributes)]
 #![allow(clippy::implicit_return, clippy::single_call_fn)]
 #![allow(clippy::pattern_type_mismatch)]
