@@ -3,8 +3,26 @@ use std::fs;
 use std::process;
 
 use crate::global::Cmd;
+use crate::global::ReadError;
+use crate::global::SingleError;
+use crate::global::WriteError;
 use crate::user_error;
-// Imports
+
+/// Trait to read a vector of a line of the directory file
+/// Enables to get path, shortcuts, priority from a dline
+trait ReadVec {
+    /// Get the path of the directory
+    fn join_elts(&self, deb: usize, offset: usize, msgf: &str) -> String;
+}
+
+impl ReadVec for Vec<&str> {
+    fn join_elts(&self, deb: usize, offset: usize, msg: &str) -> String {
+        let x = self
+            .get(deb..self.len().checked_sub(offset).data_error(msg, None))
+            .data_error(msg, None);
+        x.join(";")
+    }
+}
 
 /// Structure to contain the state of the search
 #[derive(Default, Debug)]
@@ -202,7 +220,8 @@ fn add(dirline: &DirsLine, success: &mut bool, new_shortc: &str, path: &str) -> 
 ///
 fn edit(dirline: &DirsLine, success: &mut bool, shortc: &str, path: &str) -> String {
     if dirline.path == path {
-        panic!("Path already exists");
+        user_error!("Path already exists");
+        dirline.join(";")
     } else if dirline.shortcs.contains(&shortc) {
         *success = true;
         format!("{path};{};{}", dirline.shortcs.join(";"), dirline.priory)
@@ -221,9 +240,8 @@ fn edit(dirline: &DirsLine, success: &mut bool, shortc: &str, path: &str) -> Str
 /// assert!(std_path(&Some(String::from("/home/user/folder/"))) == "/home/user/folder");
 /// ```
 ///
-fn std_path(path: &Option<String>) -> String {
-    let somepath = path.as_ref().expect("Path not found in command line");
-    somepath.strip_suffix('/').unwrap_or(somepath).to_owned()
+fn std_path(path: &String) -> String {
+    path.strip_suffix('/').unwrap_or(path).to_owned()
 }
 
 ///////////////////////////////: command keywords functions  :///////////////////////////////
@@ -262,39 +280,46 @@ fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate
         assert!(vecline.first().unwrap_or(&"").is_empty(), "Invalid rdline {rdline} found in directory library");
         String::new()
     } else {
-        let priory = vecline.last().expect("No priority found in line")
+        #[allow(clippy::expect_used)]
+        let priory = vecline.last().expect("[Data Error] Missing priority in dline.")
             .parse::<u32>()
-            .unwrap_or_else(|err| panic!("priory not in integer in line {rdline} : {err}"));
+            .data_error(format!("Priority not an integer in {rdline}"), None);
 
         let dirline = DirsLine {
-            path: vecline.first().expect("No path found in line"),
-            shortcs: vecline.get(1..vecline.len().checked_sub(1).expect("Enable to subtract")).expect("Slicing error on line : missing values."),
+            path: if let Some(pth) = vecline.first() { pth } else { return String::new() },
+            shortcs: vecline.get(1..vecline.len().checked_sub(1).data_error("Unable to subtract to priority", None)).data_error("Missing values in line", None),
             priory,
-        priory2: priory.checked_add(incr).expect("Overflow on priority"),
+        priory2: priory.checked_add(incr).internal_error("Overflow on priority", None),
         };
 
         #[rustfmt::skip]
-        let line2: String = match args.first().expect("Found empty line in dirs") {
-            Cmd::Get([shortc, _]) if shortc.is_none() => get(&dirline, success, sstate, ""),
-            Cmd::Get([shortc, _]) => get(&dirline, success, sstate, shortc.as_ref().expect("No shortcut found in get command")),
+        let line2 = if let Some(first) = args.first() {
+            match first {
+            Cmd::Get([None, _]) => get(&dirline, success, sstate, ""),
+            Cmd::Get([Some(shortc), _]) => get(&dirline, success, sstate, shortc),
             Cmd::Reset => format!(
                 "{};{}",
-                vecline.get(0..vecline.len().checked_sub(1).expect("VLine was empty")).expect("vecline was empty").join(";"),
+                vecline.join_elts(0, 1, "Missing values in line"),
                 0
             ),
             Cmd::Decr(decr) => format!(
                 "{};{}",
-                vecline.get(0..vecline.len().checked_sub(1).expect("Invalid format of line")).expect("Format of line not valid").join(";"),
+                vecline.join_elts(0, 1, "Missing values in line"),
                 priory.saturating_sub(*decr)),
 
             Cmd::Rm(shortc) => remove(&dirline, success, shortc),
             Cmd::Del(path) => if *dirline.path == *path { *success = true; return String::new() } 
                                        else { dirline.join(";") },
 
-            Cmd::Add([shortc, path]) => add(&dirline, success, shortc.as_ref().expect("Second argument expected to add").as_str(), &std_path(path)),
-            Cmd::Edit([shortc, path]) => edit(&dirline, success, shortc.as_ref().expect("Second argument expected to edit").as_str(), &std_path(path)),
+            Cmd::Add([None, _] | [_, None]) | Cmd::Edit([None, _] | [_, None]) => { user_error!("Missing shortcut or path to <-add> or <-edit>"); String::new() }
 
-            // _ => panic!("Invalid command : {:?}", args),
+            Cmd::Add([Some(shortc), Some(path)]) => add(&dirline, success, shortc.as_str(), &std_path(path)),
+            Cmd::Edit([Some(shortc), Some(path)]) => edit(&dirline, success, shortc.as_str(), &std_path(path)),
+
+        }} else {
+            #[allow(clippy::print_stderr)]
+            {eprintln!("[Internal Error] No option pushed in argument list.");};
+            return String::new();
         };
 
         if line2.is_empty() { String::new() }
@@ -304,76 +329,61 @@ fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate
 
 /// Function to read the directory file
 /// # Arguments
-/// * `dirspath` - The path of the directory file
+/// * `dpath` - The path of the directory file
 /// * `args` - The arguments of the command
 /// * `incr` - The increment value
 /// # Returns
 /// The path of the directory
 /// # Example
 /// ```
-/// let dirspath = "/home/user/.dirs";
+/// let dpath = "/home/user/.dirs";
 /// let args = vec!["get".to_string(), "f".to_string()];
-/// let path = read(&dirspath, &args, 1);
+/// let path = read(&dpath, &args, 1);
 /// ```
 /// # Panics
 /// If the file is not found
 ///
-pub fn read(dirspath: &str, args: &[Cmd], incr: u32) -> Option<String> {
+pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
     let mut sstate = SearchState::default();
     let mut success = false;
 
-    let mut data: String = fs::read_to_string(dirspath)
-        .unwrap_or_else(|er| panic!("Unable to read file: {er}"))
+    let mut data: String = fs::read_to_string(dpath)
+        .read_error(dpath, None)
         .split('\n')
         .map(|dline| read_dline(dline.trim(), args, &mut success, incr, &mut sstate))
         .collect();
 
-    let temp = sstate
+    let res = sstate
         .correct
-        .clone()
-        .unwrap_or_else(|| sstate.prioritised.clone().unwrap_or_default());
-
-    let mut res: String = temp;
+        .unwrap_or_else(|| sstate.prioritised.unwrap_or_default());
 
     #[rustfmt::skip]
     for arg in args { match arg {
-        Cmd::Get([shortc, path]) => {
-            if success || shortc.is_none() {
-                res = format!("{}/{}", res, path.clone().unwrap_or_default());
-            } else {
-                panic!("Shortcut {} not found.", shortc.as_ref().expect("No shortcut found in get command"));
-            };
-            return Some(res);
-        }
+        Cmd::Get([Some(shortc), _]) if !success => user_error!("Shortcut {} not found. Run <gt ?> to see list of supported shortcuts", shortc),
+        Cmd::Get([_, path]) => return Some(format!("{res}/{}", path.clone().unwrap_or_default())),
 
         _ if success => (),
         Cmd::Reset | Cmd::Decr(_) => (),
-        Cmd::Add([shortc, path]) => write!(
-            data,
-            "{};{};0",
-            std_path(path),
-            shortc.as_ref().expect("Missing shortcut to add")
-        )
-        .unwrap_or_else(|er| panic!("Unable to add line to data: {er}")),
+        Cmd::Add([_, None]) => user_error!("Missing path to <-add>"),
+        Cmd::Add([opt_shortc, Some(path)]) =>
+            match opt_shortc {
+                Some(shortc) => write!(data, "{};{};0", std_path(path), shortc).write_error("Lines"),
+                None => user_error!("Missing shortcut to add"),
+            },
 
-        Cmd::Edit(_) | Cmd::Rm(_) | Cmd::Del(_) => panic!("Invalid command line: {args:?}"),
+        Cmd::Edit(_) | Cmd::Rm(_) | Cmd::Del(_) => user_error!("Invalid command line: {args:?}"),
     };
 }
-    fs::write(dirspath, data).unwrap_or_else(|er| panic!("Unable to write file: {er}"));
+    fs::write(dpath, data).write_error(dpath);
 
     None
 }
 
 /// Function to print state of the directories
 /// # Arguments
-/// * `dirspath` - The path of the directory file
+/// * `dpath` - The path of the directory file
 /// # Returns
 /// `None`
-/// # Example
-/// ```
-/// let dirspath = "/home/user/.dirs";
-/// let state = state(&dirspath);
-/// ```
 /// # Panics
 /// If the file is not found
 /// # Note
@@ -384,17 +394,16 @@ pub fn read(dirspath: &str, args: &[Cmd], incr: u32) -> Option<String> {
 /// third       afirstshortcut           14
 /// ```
 ///
-pub fn state(dirspath: &str) -> ! {
+pub fn state(dpath: &str) -> ! {
     let mut spaces: Vec<usize> = vec![];
-    let binding = fs::read_to_string(dirspath)
-        .unwrap_or_else(|er| panic!("!State! Enable to read file! {er}"));
+    let binding = fs::read_to_string(dpath).read_error(dpath, None);
     let data = binding.lines().collect::<Vec<&str>>();
     for dline in &data {
         dline.split(';').enumerate().for_each(|(idx, elt)| {
-            let new = elt.len().checked_add(1).expect("Overflow on space");
-            match spaces.get(idx) {
+            let new = elt.len().checked_add(1).unwrap_or(elt.len());
+            match spaces.get_mut(idx) {
                 Some(space) if new > *space => {
-                    *spaces.get_mut(idx).expect("Expected tab size") = new;
+                    *space = new;
                 }
                 Some(_) => (),
                 None => spaces.push(new),
@@ -406,15 +415,17 @@ pub fn state(dirspath: &str) -> ! {
     let mut state = String::new();
     for dline in &data {
         let mut sline = dline.split(';').collect::<Vec<&str>>();
-        let priory = sline.pop().expect("Empty line found in dirs");
-        let mut str1 = String::new();
-        sline.iter().enumerate().for_each(|(idx, elt)| {
-            let space = spaces.get(idx).unwrap_or(&0);
-            write!(&mut str1, "{elt:<space$}")
-                .unwrap_or_else(|er| panic!("Unable to write to string: {er}"));
-        });
-        writeln!(state, "{str1:<total_space$}{priory}")
-            .unwrap_or_else(|er| panic!("Unable to write to string: {er}"));
+        match sline.pop() {
+            None => continue,
+            Some(priory) => {
+                let mut str1 = String::new();
+                sline.iter().enumerate().for_each(|(idx, elt)| {
+                    let space = spaces.get(idx).unwrap_or(&0);
+                    write!(&mut str1, "{elt:<space$}").write_error("line");
+                });
+                writeln!(state, "{str1:<total_space$}{priory}").write_error("lines");
+            }
+        }
     }
 
     #[allow(clippy::print_stdout)]

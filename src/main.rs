@@ -2,7 +2,8 @@
 #![warn(clippy::all, clippy::pedantic, clippy::restriction, clippy::nursery, clippy::cargo)]
 #![feature(stmt_expr_attributes)]
 #![allow(clippy::implicit_return, clippy::single_call_fn)]
-#![allow(clippy::expect_used, clippy::panic)]
+#![allow(clippy::pattern_type_mismatch)]
+
 
 //! Main module: `goto` is a command line tool to navigate through directories.
 //! # Arguments 
@@ -135,7 +136,7 @@ impl<'global> Default for GlobalData<'global> {
 /// * `incr` - The increment to add to the usage of the directory
 /// # Returns
 /// The path of the directory to go to, if the command is valid.
-/// # Panics
+/// # Warning
 /// If the command is invalid.
 /// # Note
 /// This function is used to find the path of the directory to go to, and to update the usage of the directory if the command is valid.
@@ -145,10 +146,10 @@ fn no_read(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
     let mut res = None;
     #[rustfmt::skip]
     args2.iter().for_each(|arg| match arg.as_str() {
-        "-pop" => res = Some(hist::popd(hist)),
+        "-pop" => res = hist::popd(hist),
         "-state" => dirs::state(dirs),
         "-code" | "-noclear" | "-still" => (),
-        _ => panic!("Invalid command <{}> in <{}>", arg, env::args().collect::<Vec<String>>().join(" ")),
+        _ => user_error!("Invalid command <{}> in <{}>", arg, env::args().collect::<Vec<String>>().join(" ")),
     });
     res
 }
@@ -160,17 +161,22 @@ fn no_read(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
 /// # Note
 /// This function is used to open the directory in Visual Studio Code, if the `code` argument is present.
 /// The function uses the `code` command to open the directory in Visual Studio Code.
-/// The function panics if the `code` command is not found.
+/// The function raises a warning if the `code` command is not found.
 /// The function is called after finding the path of the directory to go to, and after updating the usage of the directory.
 ///
-fn code(args2: &[String], path: &str) {
+fn vscode(args2: &[String], path: &str) {
     if args2.contains(&String::from("-code")) {
-     process::Command::new("code")
+     match process::Command::new("code")
             .arg(path)
-            .spawn()
-            .unwrap_or_else(|er| panic!("Unable to open code {er}"));
+            .spawn() {
+                Ok(mut subprocesses) => { match subprocesses.wait() {
+                    Ok(_) => (),
+                    Err(er) => user_error!("Unable to open VSCode: {er}"),
+                } }
+                Err(er) => user_error!("Unable to open VSCode: {er}"),
+
+            }
     }
-    // let _ = subprocesses.wait();
 }
 
 ///////////////////////////////: goto functions  :///////////////////////////////
@@ -184,7 +190,6 @@ fn code(args2: &[String], path: &str) {
 /// This function is used to get the arguments of the command, and to separate the arguments of the command that are not part of the command.
 /// The function also checks that the number of arguments of the command is valid.
 /// The function is called at the beginning of the program, to get the arguments of the command, and to separate the arguments of the command that are not part of the command.
-/// The function is used to avoid the use of `env::args().nth(n).expect("message")` that would panic if the iterator does not have enough elements.
 /// The function is also used to check that the number of arguments of the command is valid.
 /// The function is also used to separate the arguments of the command that are not part of the command.
 ///
@@ -194,7 +199,6 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
     let mut args1: Vec<Cmd> = vec![];
     let mut args2: Vec<String> = vec![];
     let mut get = false;
-    let mut last: Option<String> = None;
 
     loop {
         let temp = cmdline.next();
@@ -211,24 +215,20 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
                                 "Missing argument of {} in <{}>", 
                                 &curr, env::args().collect::<Vec<String>>().join(" ")
                         );
-                        last = Some(curr.clone());
-                        args1.push(curr.to_cmd().unwrap_or_else(|err| panic!("{err}")));
+                        args1.push(curr.to_cmd());
                     }
 
                     None => match curr.as_str() {
                         "features" => break,
-                        "-get" => { last = Some(String::from("-get")); 
-                                    get = true; 
-                                    args1.push(curr.to_cmd().unwrap_or_else(|err| panic!("{err}"))); }
-                        // Is a no-read command (code, clear, still, pop, state, noclear, etc.)
+                        "-get" => { get = true; 
+                                    args1.push(curr.to_cmd()); },
+                        // Is a no_read command (code, clear, still, pop, state, noclear, etc.)
                         _ if gdata.no_read.contains(&curr.as_str()) => args2.push(curr.clone()),
-                        _ if last.is_none() => { args1.push(Cmd::Get([Some(curr.clone()), None])); 
-                                                 last = Some(String::from("-get")); }
-                        // _ if last.as_ref().expect("Last isn't none") == "-get" => {
-                        _  => args1.last_mut().unwrap_or_else(|| panic!("Invalid command <{}> in <{}>",
-                                                                        curr, env::args().collect::<Vec<String>>().join(" "))).append(curr),
-                        
-                        // _ => { panic!("Invalid command <{}> in <{}>", curr, env::args().collect::<Vec<String>>().join(" ")); },
+                        // Is an argument to a previous option
+                        _ => match args1.last_mut() {
+                            None => args1.push(Cmd::Get([Some(curr.clone()), None])),
+                            Some(last) => last.append(curr),
+                            }
                     },
                 }
             },
@@ -264,16 +264,16 @@ fn dos2unix(ipath: Option<String>, unix: bool) -> Option<String> {
 
 ///////////////////////////////: main functions  :///////////////////////////////
 
+
 fn main() {
     let gdata = GlobalData::default();
     let (args1, args2, get) = get_args(&gdata);
-    // dbg_print!(">>> <{:?}> with <{:?}>\n", args1, args2);
     let path  = dirs::read(gdata.dirs, &args1, gdata.incr);
     let ospath = dos2unix(path, gdata.unix);
 
-    if let Some(found) = &ospath {
+    if let Some(found) = ospath.as_ref() {
         hist::pushd(gdata.hist, found);
-        code(&args2, found);
+        vscode(&args2, found);
     };
 
     no_read(gdata.dirs, gdata.hist, &args2);
@@ -284,6 +284,6 @@ fn main() {
         "{}#{}#{}",
         u8::from(!args2.contains(&String::from("-noclear"))),
         u8::from(get),
-        ospath.unwrap_or_default()
+        &ospath.unwrap_or_default()
     );};
 }

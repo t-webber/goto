@@ -8,4 +8,5 @@ rust_doc/CACHEDIR.TAG
 debug/
 release/goto.exe
 release/goto
-tools/
+rust_doc/.rustc_info.json
+rust_doc/CACHEDIR.TAG
