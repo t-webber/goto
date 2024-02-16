@@ -37,12 +37,12 @@ pub fn pushd(histpath: &str, path: &str) {
 /// # Returns
 /// The last non empty line.
 /// # Example
-/// ```
+/// ```rust
 /// let lines = vec!["/path1/folder1/;pid1;time1".to_owned(),"/path2/folder2;pid2;time2".to_owned()];
 /// assert_eq!(popline(&mut lines),Some("/path2/folder2".to_owned()));
 ///
-/// let lines2 = vec!["/path/folder/pid/time".to_owned(),"".to_owned()];
-/// assert_eq!(popline(&mut lines2), Some("/path/folder".to_owned());
+/// let lines2 = vec!["/path/folder/pid/time".to_owned(),String::new()];
+/// assert_eq!(popline(&mut lines2), Some("/path/folder".to_owned()));
 /// ```
 /// # Note
 /// The function calls itself recursively until it finds a non empty line.

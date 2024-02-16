@@ -124,6 +124,16 @@ impl<T: Default, U: fmt::Display, E: fmt::Display> SingleError<T, U> for Result<
     }
 }
 
+/// Contains the shortcut and the path.
+/// Is used to store them and to pass them to a Cmd element.
+#[derive(Debug, Default)]
+pub struct ShortPath {
+    /// Shortcut entered by the user.
+    pub short: Option<String>,
+    /// Path to the directory, or subpath of the directory corresponding to the shortcut.
+    pub path: Option<String>,
+}
+
 /// `enum` to store the command to execute, and its arguments
 /// # Examples
 /// ```
@@ -134,11 +144,11 @@ impl<T: Default, U: fmt::Display, E: fmt::Display> SingleError<T, U> for Result<
 #[derive(Debug)]
 pub enum Cmd {
     /// Get the path of a directory.
-    Get([Option<String>; 2]),
+    Get(ShortPath),
     /// Add a directory to the file of supported shortcuts.
-    Add([Option<String>; 2]),
+    Add(ShortPath),
     /// Edit the path of a directory.
-    Edit([Option<String>; 2]),
+    Edit(ShortPath),
     /// Remove a directory from the file of supported shortcuts.
     Rm(String),
     /// Delete a directory from the file of supported shortcuts.
@@ -149,41 +159,30 @@ pub enum Cmd {
     Reset,
 }
 
-// pub enum RefCmd<'refcmd> {
-//     /// Get the path of a directory.
-//     Get([Option<&'refcmd String>; 2]),
-//     /// Add a directory to the file of supported shortcuts.
-//     Add([Option<&'refcmd String>; 2]),
-//     /// Edit the path of a directory.
-//     Edit([Option<&'refcmd String>; 2]),
-//     /// Remove a directory from the file of supported shortcuts.
-//     Rm(&'refcmd String),
-//     /// Delete a directory from the file of supported shortcuts.
-//     Del(&'refcmd String),
-//     /// Decrement the usage of all directories.
-//     Decr(u32),
-//     /// Reset the usage of all directories to 0.
-//     Reset,
-// }
-
 impl fmt::Display for Cmd {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         let val = match self {
-            Self::Get([short, path]) => format!(
-                "<goto {} {}>",
-                &short.clone().unwrap_or_default(),
-                &path.clone().unwrap_or_default()
-            ),
-            Self::Add([short, path]) => format!(
-                "<add {} {}>",
-                &short.clone().unwrap_or_default(),
-                &path.clone().unwrap_or_default()
-            ),
-            Self::Edit([short, path]) => format!(
-                "<edit {} {}>",
-                &short.clone().unwrap_or_default(),
-                &path.clone().unwrap_or_default()
-            ),
+            Self::Get(ShortPath { short, path }) => {
+                format!(
+                    "<goto {} {}>",
+                    &short.clone().unwrap_or_default(),
+                    &path.clone().unwrap_or_default()
+                )
+            }
+            Self::Add(ShortPath { short, path }) => {
+                format!(
+                    "<add {} {}>",
+                    &short.clone().unwrap_or_default(),
+                    &path.clone().unwrap_or_default()
+                )
+            }
+            Self::Edit(ShortPath { short, path }) => {
+                format!(
+                    "<edit {} {}>",
+                    &short.clone().unwrap_or_default(),
+                    &path.clone().unwrap_or_default()
+                )
+            }
             Self::Rm(short) => format!("<rm {short}>"),
             Self::Del(path) => format!("<del {path}>"),
             Self::Decr(val) => format!("<decr {val}>"),
@@ -195,23 +194,9 @@ impl fmt::Display for Cmd {
 
 impl Default for Cmd {
     fn default() -> Self {
-        Self::Get([None, None])
+        Self::Get(ShortPath::default())
     }
 }
-
-// impl<'refcmd> AsRef<RefCmd<'refcmd>> for Cmd {
-//     fn as_ref(&self) -> &RefCmd<'refcmd> {
-//         match &self {
-//             Cmd::Get([short, path]) => &RefCmd::Get([short.as_ref(), path.as_ref()]),
-//             Cmd::Add(_) => todo!(),
-//             Cmd::Edit(_) => todo!(),
-//             Cmd::Rm(_) => todo!(),
-//             Cmd::Del(_) => todo!(),
-//             Cmd::Decr(_) => todo!(),
-//             Cmd::Reset => todo!(),
-//         }
-//     }
-// }
 
 impl Cmd {
     /// Implement the `append` method for the `Cmd` enum.
@@ -227,6 +212,7 @@ impl Cmd {
     /// ```
     ///
     pub fn append(&mut self, value: String) {
+        #[rustfmt::skip]
         match mem::take(self) {
             Self::Reset => user_error!("The <-reset> option takes no arguments."),
             Self::Decr(0) => {
@@ -236,14 +222,14 @@ impl Cmd {
                 }));
             }
 
-            Self::Get([None, _]) => *self = Self::Get([Some(value), None]),
-            Self::Get([shortc, None]) => *self = Self::Get([shortc, Some(value)]),
+            Self::Get(ShortPath{short: None, ..}) => *self = Self::Get(ShortPath{short: Some(value), path: None}),
+            Self::Get(ShortPath{short,path: None}) => *self = Self::Get(ShortPath{short, path: Some(value)}),
 
-            Self::Add([None, _]) => *self = Self::Add([Some(value), None]),
-            Self::Add([shortc, None]) => *self = Self::Add([shortc, Some(value)]),
+            Self::Add(ShortPath{short: None, ..}) => *self = Self::Add(ShortPath{short: Some(value), path: None}),
+            Self::Add(ShortPath{short, path: None}) => *self = Self::Add(ShortPath{short, path: Some(value)}),
 
-            Self::Edit([None, _]) => *self = Self::Edit([Some(value), None]),
-            Self::Edit([shortc, None]) => *self = Self::Edit([shortc, Some(value)]),
+            Self::Edit(ShortPath{short: None, ..}) => *self = Self::Edit(ShortPath{short: Some(value), path: None}),
+            Self::Edit(ShortPath{short, path: None}) => *self = Self::Edit(ShortPath{short, path: Some(value)}),
 
             Self::Rm(st) if st.is_empty() => *self = Self::Rm(value),
             Self::Del(st) if st.is_empty() => *self = Self::Del(value),
@@ -270,9 +256,9 @@ impl ToCmd for str {
     fn to_cmd(&self) -> Cmd {
         #[allow(clippy::print_stderr)]
         match self {
-            "-get" => Cmd::Get([None, None]),
-            "-add" => Cmd::Add([None, None]),
-            "-edit" => Cmd::Edit([None, None]),
+            "-get" => Cmd::Get(ShortPath::default()),
+            "-add" => Cmd::Add(ShortPath::default()),
+            "-edit" => Cmd::Edit(ShortPath::default()),
             "-remove" => Cmd::Rm(String::new()),
             "-reset" => Cmd::Reset,
             "-delete" => Cmd::Del(String::new()),
@@ -290,3 +276,80 @@ impl ToCmd for String {
         self.as_str().to_cmd()
     }
 }
+
+// /// Trait to convert to a reference of a command
+// /// in order to match with exact pattern.
+// pub enum RefCmd<'refcmd> {
+//     /// Get the path of a directory.
+//     Get([Option<&'refcmd String>; 2]),
+//     /// Add a directory to the file of supported shortcuts.
+//     Add([Option<&'refcmd String>; 2]),
+//     /// Edit the path of a directory.
+//     Edit([Option<&'refcmd String>; 2]),
+//     /// Remove a directory from the file of supported shortcuts.
+//     Rm(&'refcmd String),
+//     /// Delete a directory from the file of supported shortcuts.
+//     Del(&'refcmd String),
+//     /// Decrement the usage of all directories.
+//     Decr(&'refcmd u32),
+//     /// Reset the usage of all directories to 0.
+//     Reset,
+// }
+
+// pub enum VarLenInner<'innerslice> {
+//     None,
+//     One(Option<&'innerslice String>),
+//     Two(InnerSlice<'innerslice>),
+// }
+
+// pub struct InnerSlice<'innerslice>([Option<&'innerslice String>; 2]);
+
+// // pub struct OuterSlice([Option<String>]);
+
+// impl<'innerslice> AsRef<VarLenInner<'innerslice>> for Vec<Option<String>> {
+//     fn as_ref(&self) -> &VarLenInner<'innerslice> {
+//         match self.as_slice() {
+//             [a] => VarLenInner::<'innerslice>::One(a.as_ref::<'innerslice>()),
+//             [a, b] => VarLenInner::Two(InnerSlice([a.as_ref(), b.as_ref()])),
+//             _ => {
+//                 eprintln!("Overflow in slice vec conversion");
+//                 VarLenInner::None
+//             }
+//         }
+//     }
+// }
+
+// impl<'innerslice> VarLenInner<'innerslice> {
+//     fn to_2slice(self) -> [Option<&'innerslice String>; 2] {
+//         match self {
+//             VarLenInner::Two(InnerSlice([a, b])) => [a, b],
+//             _ => {
+//                 eprint!("[Internal Error] Casting VarLenInner with missing arguments to a length 2 slice.");
+//                 [None, None]
+//             }
+//         }
+//     }
+// }
+
+// impl<'refcmd> AsRef<RefCmd<'refcmd>> for Cmd {
+//     fn as_ref(&self) -> &RefCmd<'refcmd> {
+//         match self {
+//             Cmd::Get(v) => {
+//                 let x: &VarLenInner = v.to_vec().as_ref();
+//                 &RefCmd::Get(x.to_2slice())
+//             }
+//             Cmd::Add(v) => {
+//                 let x: &VarLenInner = v.to_vec().as_ref();
+//                 &RefCmd::Add(x.to_2slice())
+//             }
+//             Cmd::Edit(v) => {
+//                 let x: &VarLenInner = v.to_vec().as_ref();
+//                 &RefCmd::Edit(x.to_2slice())
+//             }
+//             Cmd::Rm(s) => &RefCmd::Rm(s),
+//             Cmd::Del(s) => &RefCmd::Del(s),
+//             Cmd::Decr(n) => &RefCmd::Decr(n),
+//             Cmd::Reset => &RefCmd::Reset,
+//         }
+//     }
+// }

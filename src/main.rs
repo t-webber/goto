@@ -55,7 +55,7 @@
 //! # Note
 //! In powershell, you don't need to use the `.` before the command.
 
-use crate::global::{Cmd, ToCmd};
+use crate::global::{Cmd, ToCmd, ShortPath};
 use std::collections;
 use std::env;
 use std::process;
@@ -226,7 +226,7 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
                         _ if gdata.no_read.contains(&curr.as_str()) => args2.push(curr.clone()),
                         // Is an argument to a previous option
                         _ => match args1.last_mut() {
-                            None => args1.push(Cmd::Get([Some(curr.clone()), None])),
+                            None => args1.push(Cmd::Get(ShortPath{ short: Some(curr.clone()), path: None})),
                             Some(last) => last.append(curr),
                             }
                     },

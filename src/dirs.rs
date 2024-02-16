@@ -2,10 +2,7 @@ use core::fmt::Write;
 use std::fs;
 use std::process;
 
-use crate::global::Cmd;
-use crate::global::ReadError;
-use crate::global::SingleError;
-use crate::global::WriteError;
+use crate::global::{Cmd, ReadError, ShortPath, SingleError, WriteError};
 use crate::user_error;
 
 /// Trait to read a vector of a line of the directory file
@@ -295,8 +292,8 @@ fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate
         #[rustfmt::skip]
         let line2 = if let Some(first) = args.first() {
             match first {
-            Cmd::Get([None, _]) => get(&dirline, success, sstate, ""),
-            Cmd::Get([Some(shortc), _]) => get(&dirline, success, sstate, shortc),
+            Cmd::Get(ShortPath{short: None, ..}) => get(&dirline, success, sstate, ""),
+            Cmd::Get(ShortPath{short: Some(shortc), ..}) => get(&dirline, success, sstate, shortc),
             Cmd::Reset => format!(
                 "{};{}",
                 vecline.join_elts(0, 1, "Missing values in line"),
@@ -308,13 +305,17 @@ fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate
                 priory.saturating_sub(*decr)),
 
             Cmd::Rm(shortc) => remove(&dirline, success, shortc),
-            Cmd::Del(path) => if *dirline.path == *path { *success = true; return String::new() } 
-                                       else { dirline.join(";") },
+            Cmd::Del(path) if *dirline.path == *path => {*success = true; return String::new() },
+            Cmd::Del(_) => dirline.join(";"),
 
-            Cmd::Add([None, _] | [_, None]) | Cmd::Edit([None, _] | [_, None]) => { user_error!("Missing shortcut or path to <-add> or <-edit>"); String::new() }
+            Cmd::Add(ShortPath{short: None, ..} | ShortPath{path: None, ..})
+            | Cmd::Edit(ShortPath{short: None, ..} | ShortPath{path: None, ..})
+                => { user_error!("Missing shortcut or path to <-add> or <-edit>"); String::new() },
 
-            Cmd::Add([Some(shortc), Some(path)]) => add(&dirline, success, shortc.as_str(), &std_path(path)),
-            Cmd::Edit([Some(shortc), Some(path)]) => edit(&dirline, success, shortc.as_str(), &std_path(path)),
+            Cmd::Add(ShortPath{short: Some(shortc), path: Some(path)}) 
+                => add(&dirline, success, shortc.as_str(), &std_path(path)),
+            Cmd::Edit(ShortPath{short: Some(shortc), path: Some(path)}) 
+                => edit(&dirline, success, shortc.as_str(), &std_path(path)),
 
         }} else {
             #[allow(clippy::print_stderr)]
@@ -359,13 +360,13 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
 
     #[rustfmt::skip]
     for arg in args { match arg {
-        Cmd::Get([Some(shortc), _]) if !success => user_error!("Shortcut {} not found. Run <gt ?> to see list of supported shortcuts", shortc),
-        Cmd::Get([_, path]) => return Some(format!("{res}/{}", path.clone().unwrap_or_default())),
+        Cmd::Get(ShortPath{short: Some(shortc), ..}) if !success => user_error!("Shortcut {} not found. Run <gt ?> to see list of supported shortcuts", shortc),
+        Cmd::Get(ShortPath{path, ..}) => return Some(format!("{res}/{}", path.clone().unwrap_or_default())),
 
         _ if success => (),
         Cmd::Reset | Cmd::Decr(_) => (),
-        Cmd::Add([_, None]) => user_error!("Missing path to <-add>"),
-        Cmd::Add([opt_shortc, Some(path)]) =>
+        Cmd::Add(ShortPath{path: None, ..}) => user_error!("Missing path to <-add>"),
+        Cmd::Add(ShortPath{short: opt_shortc, path: Some(path)}) =>
             match opt_shortc {
                 Some(shortc) => write!(data, "{};{};0", std_path(path), shortc).write_error("Lines"),
                 None => user_error!("Missing shortcut to add"),
