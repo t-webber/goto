@@ -9,3 +9,5 @@
 //ADD: List of websites with aliases
 //ADD: Supported in cmd
 //ADD: gt ? doesn't space well on UNIX
+//BUG: rms not working
+//BUG: errors are washed by default clear, use results instead of panics, and deal with them at the end.

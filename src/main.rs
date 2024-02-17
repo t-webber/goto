@@ -55,17 +55,20 @@
 //! # Note
 //! In powershell, you don't need to use the `.` before the command.
 
-use crate::global::{Cmd, ToCmd, ShortPath};
+/// This module contains the functions to push and pop directories from the history file.
+mod dirs;
+/// This module contains all the error functions avalaible in all the program.
+mod errors;
+/// This module contains the functions to read and write the supported directories, their shortcuts and their usage.
+mod hist;
+/// This module contains the structure of the options of the goto command (get, add, edit, ...)
+mod commands;
+
+use crate::commands::{Cmd, ToCmd, ShortPath, AppendDefault};
 use std::collections;
 use std::env;
 use std::process;
 
-/// This module contains the functions to push and pop directories from the history file.
-mod dirs;
-/// This module contains all the static functions avalaible in all the program.
-mod global;
-/// This module contains the functions to read and write the supported directories, their shortcuts and their usage.
-mod hist;
 
 /// Structure to contain all the static data of the program
 struct GlobalData<'global> {
@@ -82,7 +85,7 @@ struct GlobalData<'global> {
     /// Gives the alias of each supported command
     aliass: collections::HashMap<&'global str, &'global str>,
     /// Gives the arguments that don't require reading `lib/dirs.csv`.
-    no_read: [&'global str; 5],
+    no_dirs: [&'global str; 5],
 }
 
 /// Default implementation for `GlobalData`
@@ -114,16 +117,16 @@ impl<'global> Default for GlobalData<'global> {
         let unix = cfg!(target_os = "linux");
         assert!(unix || cfg!(target_os = "windows"), "Unsupported OS");
 
-        let current = env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("lib");
+        let curr = env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("lib");
 
         Self {
-            dirs: current.join("dirs.csv").into_os_string().into_string().unwrap(),
-            hist: current.join("hist.csv").into_os_string().into_string().unwrap(),
+            dirs: curr.join("dirs.csv").into_os_string().into_string().unwrap(),
+            hist: curr.join("hist.csv").into_os_string().into_string().unwrap(),
             incr: 10,
             unix,
             argcs,
             aliass,
-            no_read: ["-noclear", "-code", "-still", "-pop", "-state"],
+            no_dirs: ["-noclear", "-code", "-still", "-pop", "-state"],
         }
     }
 }
@@ -144,7 +147,7 @@ impl<'global> Default for GlobalData<'global> {
 /// This function is used to find the path of the directory to go to, and to update the usage of the directory if the command is valid.
 /// The function also prints the path of the directory to go to, and calls the `code` function to open the directory in Visual Studio Code.
 /// The function also calls the `clear` function to clear the terminal, unless the `noclear` argument is present.
-fn no_read(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
+fn no_dirs(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
     let mut res = None;
     #[rustfmt::skip]
     args2.iter().for_each(|arg| match arg.as_str() {
@@ -201,6 +204,7 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
     let mut args1: Vec<Cmd> = vec![];
     let mut args2: Vec<String> = vec![];
     let mut get = false;
+    let here = env::current_dir().unwrap().to_str().unwrap().to_owned();
 
     loop {
         let temp = cmdline.next();
@@ -213,10 +217,9 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
                 #[rustfmt::skip]
                 match gdata.argcs.get(curr.as_str()) {
                     Some(value) => {
-                        assert!(cmdline.len() >= *value, 
-                                "Missing argument of {} in <{}>", 
-                                &curr, env::args().collect::<Vec<String>>().join(" ")
-                        );
+                        if cmdline.len() < *value {
+                            args1.last_mut().append_default(&here);
+                        };
                         args1.push(curr.to_cmd());
                     }
 
@@ -224,8 +227,8 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
                         "features" => break,
                         "-get" => { get = true; 
                                     args1.push(curr.to_cmd()); },
-                        // Is a no_read command (code, clear, still, pop, state, noclear, etc.)
-                        _ if gdata.no_read.contains(&curr.as_str()) => args2.push(curr.clone()),
+                        // Is a no_dirs command (code, clear, still, pop, state, noclear, etc.)
+                        _ if gdata.no_dirs.contains(&curr.as_str()) => args2.push(curr.clone()),
                         // Is an argument to a previous option
                         _ => match args1.last_mut() {
                             None => args1.push(Cmd::Get(ShortPath{ short: Some(curr.clone()), path: None})),
@@ -237,6 +240,7 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
         };
     }
 
+    args1.last_mut().append_default(&here);
     if args1.is_empty() {
         args1.push(Cmd::default());
     }
@@ -278,7 +282,8 @@ fn main() {
         vscode(&args2, found);
     };
 
-    no_read(&gdata.dirs, &gdata.hist, &args2);
+    no_dirs(&gdata.dirs, &gdata.hist, &args2);
+
 
     #[allow(clippy::print_stdout)]
     {

@@ -1,4 +1,4 @@
-use crate::global::{ReadError, SingleError, WriteError};
+use crate::errors::{ReadError, SingleError, WriteError};
 use std::fs;
 use std::process;
 use std::time;

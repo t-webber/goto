@@ -2,7 +2,8 @@ use core::fmt::Write;
 use std::fs;
 use std::process;
 
-use crate::global::{Cmd, ReadError, ShortPath, SingleError, WriteError};
+use crate::commands::{Cmd, ShortPath};
+use crate::errors::{ReadError, SingleError, WriteError};
 use crate::user_error;
 
 /// Trait to read a vector of a line of the directory file
@@ -228,19 +229,7 @@ fn edit(dirline: &DirsLine, success: &mut bool, shortc: &str, path: &str) -> Str
     }
 }
 
-/// Function to format a path
-/// # Arguments
-/// * `path` - The path to format
-/// # Returns
-/// The formatted path
-/// # Example   
-/// ```
-/// assert!(std_path(&Some(String::from("/home/user/folder/"))) == "/home/user/folder");
-/// ```
-///
-fn std_path(path: &String) -> String {
-    path.strip_suffix('/').unwrap_or(path).to_owned()
-}
+
 
 ///////////////////////////////: command keywords functions  :///////////////////////////////
 
@@ -314,9 +303,9 @@ fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate
                 => { user_error!("Missing shortcut or path to <-add> or <-edit>"); String::new() },
 
             Cmd::Add(ShortPath{short: Some(shortc), path: Some(path)}) 
-                => add(&dirline, success, shortc.as_str(), &std_path(path)),
+                => add(&dirline, success, shortc.as_str(), path),
             Cmd::Edit(ShortPath{short: Some(shortc), path: Some(path)}) 
-                => edit(&dirline, success, shortc.as_str(), &std_path(path)),
+                => edit(&dirline, success, shortc.as_str(), path),
 
         }} else {
             #[allow(clippy::print_stderr)]
@@ -370,7 +359,7 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
         Cmd::Add(ShortPath{path: None, ..}) => user_error!("Missing path to <-add>"),
         Cmd::Add(ShortPath{short: opt_shortc, path: Some(path)}) =>
             match opt_shortc {
-                Some(shortc) => write!(data, "{};{};0", std_path(path), shortc).write_error("Lines"),
+                Some(shortc) => write!(data, "{};{};0", &path, shortc).write_error("Lines"),
                 None => user_error!("Missing shortcut to add"),
             },
 
