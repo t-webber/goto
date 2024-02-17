@@ -52,3 +52,5 @@ cp ./target/debug/goto* ./release
      - Then click on `OK`, `OK`, `OK` and restart the terminal
 
 5. If you are on a Unix-type OS, run `chmod +x release/goto` to make the file executable.
+
+6. Change the first line of the `release/gt` file (the `loc` variable) to your current directory.

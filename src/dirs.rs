@@ -33,6 +33,7 @@ struct SearchState {
 }
 
 /// Structure to contain the data of a line in the directory file
+#[derive(Debug)]
 struct DirsLine<'dirline> {
     /// The path of the directory
     path: &'dirline str,
@@ -354,14 +355,15 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
         .map(|dline| read_dline(dline.trim(), args, &mut success, incr, &mut sstate))
         .collect();
 
-    let res = sstate
+    let res: String = sstate
         .correct
-        .unwrap_or_else(|| sstate.prioritised.unwrap_or_default());
+        .unwrap_or_else(|| sstate.prioritised.unwrap_or_default()) + "/";
+    let mut subpath: Option<String> = None;
 
     #[rustfmt::skip]
     for arg in args { match arg {
         Cmd::Get(ShortPath{short: Some(shortc), ..}) if !success => user_error!("Shortcut {} not found. Run <gt ?> to see list of supported shortcuts", shortc),
-        Cmd::Get(ShortPath{path, ..}) => return Some(format!("{res}/{}", path.clone().unwrap_or_default())),
+        Cmd::Get(ShortPath{path, ..}) => subpath = Some(path.clone().unwrap_or_default()),
 
         _ if success => (),
         Cmd::Reset | Cmd::Decr(_) => (),
@@ -373,11 +375,11 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
             },
 
         Cmd::Edit(_) | Cmd::Rm(_) | Cmd::Del(_) => user_error!("Invalid command line: {args:?}"),
-    };
-}
-    fs::write(dpath, data).write_error(dpath);
+        };
+    }
 
-    None
+    fs::write(dpath, data).write_error(dpath);
+    subpath.map(|spath| res + &spath)
 }
 
 /// Function to print state of the directories

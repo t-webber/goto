@@ -8,5 +8,4 @@
 //ADD: Web option to open files
 //ADD: List of websites with aliases
 //ADD: Supported in cmd
-//ADD: Decreasing moving
-//ADD: gt ? not working on unix
+//ADD: gt ? doesn't space well on UNIX

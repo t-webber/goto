@@ -4,6 +4,7 @@ tests/
 lib/
 rust_doc/.rustc_info.json
 rust_doc/CACHEDIR.TAG
+rust_doc/.rustdoc_fingerprint.json
 release/goto.exe
 release/goto
 temp/

@@ -70,9 +70,9 @@ mod hist;
 /// Structure to contain all the static data of the program
 struct GlobalData<'global> {
     /// Path to the file containing the directories
-    dirs: &'global str,
+    dirs: String,
     /// Path to the file containing the history for popd/pushd
-    hist: &'global str,
+    hist: String,
     /// When a folder is used, `incr` is used to increment the usage of the folder
     incr: u32,
     /// Gives the number of arguments for each supported command (except the basic `goto` command that can take 0, 1 or 2 arguments).
@@ -114,9 +114,11 @@ impl<'global> Default for GlobalData<'global> {
         let unix = cfg!(target_os = "linux");
         assert!(unix || cfg!(target_os = "windows"), "Unsupported OS");
 
+        let current = env::current_exe().unwrap().parent().unwrap().parent().unwrap().join("lib");
+
         Self {
-            dirs: if unix {"/mnt/w/files/dev/rust/goto/lib/dirs.csv" } else  {"w:/files/dev/rust/goto/lib/dirs.csv" },
-            hist: if unix {"/mnt/w/files/dev/rust/goto/lib/hist.csv" } else  {"w:/files/dev/rust/goto/lib/hist.csv" },
+            dirs: current.join("dirs.csv").into_os_string().into_string().unwrap(),
+            hist: current.join("hist.csv").into_os_string().into_string().unwrap(),
             incr: 10,
             unix,
             argcs,
@@ -268,15 +270,15 @@ fn dos2unix(ipath: Option<String>, unix: bool) -> Option<String> {
 fn main() {
     let gdata = GlobalData::default();
     let (args1, args2, get) = get_args(&gdata);
-    let path  = dirs::read(gdata.dirs, &args1, gdata.incr);
+    let path  = dirs::read(&gdata.dirs, &args1, gdata.incr);
     let ospath = dos2unix(path, gdata.unix);
 
     if let Some(found) = ospath.as_ref() {
-        hist::pushd(gdata.hist, found);
+        hist::pushd(&gdata.hist, found);
         vscode(&args2, found);
     };
 
-    no_read(gdata.dirs, gdata.hist, &args2);
+    no_read(&gdata.dirs, &gdata.hist, &args2);
 
     #[allow(clippy::print_stdout)]
     {
