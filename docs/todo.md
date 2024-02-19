@@ -8,9 +8,12 @@
 //BUG: call on code outputs 4 results => no cd implied.
 //NOTE: del deletes only the path once.
 //ADD: `d:/files/dev/powershell/cmdlets;edit;pwsh;0` and `gt -edit edit d:/files/dev/rust/goto` => `d:/files/dev/rust/goto;edit;pwsh;0`! Is it good ? I think so (the shortcut is meant to mean the folder, not its content ?).
+//ADD: check if path exists before adding it to dirs.csv.
 
 ## Hist
 
 //ADD: poplocal
 //ADD: popbackuplocal
 //ADD: popclearlocal
+//ADD: delete old backups
+//ADD: delete old items in hist stack

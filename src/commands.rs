@@ -115,12 +115,8 @@ impl Cmd {
             Self::Rm(st) if st.is_empty() => *self = Self::Rm(value),
             Self::Del(st) if st.is_empty() => *self = Self::Del(value),
 
-            Self::Get(_)
-            | Self::Edit(_)
-            | Self::Add(_)
-            | Self::Rm(_)
-            | Self::Del(_)
-            | Self::Decr(_) => {
+            Self::Get(_) | Self::Edit(_) | Self::Add(_)
+            | Self::Rm(_) | Self::Del(_) | Self::Decr(_) => {
                 user_error!("Too many arguments for <{self}> command.");
             }
         }
@@ -188,8 +184,23 @@ fn path2dir(path: &str) -> String {
 /// assert!(std_path(&Some(String::from("D:/Windows\\PeRso"))) == "d:/Windows/PeRso");
 /// ```
 ///
-fn std_path(path: &str) -> String {
-    let mut to_lower = true;
+pub fn std_path(ipath: &str) -> String {
+    let mut path = ipath.to_owned().replace('\\', "/");
+    
+    let here = std::env::current_dir().user_error("Couldn't access current path", None).to_str().user_error("Error while casting current path to str", None).to_owned().replace('\\', "/");
+    let last_slash = here.rfind('/').user_error("Expected a slash in the path", None);
+    let (father, _) = here.split_at(last_slash);
+    
+    path = path.replace("..", father);
+    match path.chars().next() {
+        None => path = here,
+        Some('.') => path = father.to_owned() + &path[1..],
+        Some('/') => (),
+        _ if path.chars().nth(1) == Some(':') => (),
+        _ => path = format!("{here}/{path}"),
+    }
+
+    let mut to_lower = true; 
     let mut res = path.chars()
         .map(|char| match char {
             '\\' => {
@@ -206,7 +217,7 @@ fn std_path(path: &str) -> String {
         .collect::<String>();
     if res.ends_with('/') {
         res.pop();
-    } 
+    }
     res    
 }
 

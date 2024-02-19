@@ -152,7 +152,7 @@ impl<'global> Default for GlobalData<'global> {
             .parent()
             .expect("No parent of main.rs.")
             .parent()
-            .expect("No parent of main.rs.")
+            .expect("No grandparent of main.rs.")
             .join("lib");
 
         Self {
@@ -346,12 +346,9 @@ fn main() {
     let short_path = dirs::read(&gdata.dirs, &args1, gdata.incr);
     let pop_path = no_dirs(&gdata.dirs, &gdata.hist, &args2); // result of pop
 
-    let read = pop_path.as_ref().is_none();
+    let read = pop_path.as_ref().is_none() && short_path.as_ref().is_some();
 
     let os_path = dos2unix( pop_path.unwrap_or_else(|| short_path.unwrap_or_default()), gdata.unix);
-
-    // let dur = std::time::Duration::from_secs(2);
-    // std::thread::sleep(dur);
 
     if read { hist::pushd(&gdata.hist, &os_path); };
 

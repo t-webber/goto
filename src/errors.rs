@@ -8,7 +8,7 @@ use core::fmt;
 #[macro_export]
 macro_rules! general_error {
     ($type:expr, $($arg:tt)*) => {
-        eprintln!("\x1b[31m[{}] {} {}.\n{}.\x1b[0m", $type, file!(), line!(), format!($($arg)*))
+        eprintln!("\x1b[31m[{}] {}:{}:{}.\n{}.\x1b[0m", $type, file!(), line!(), column!(), format!($($arg)*))
     };
 }
 

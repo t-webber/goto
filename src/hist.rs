@@ -1,5 +1,6 @@
+use crate::commands::std_path;
 use crate::errors::{ReadError, SingleError, WriteError};
-use crate::{data_error, file_error, general_error, user_error};
+use crate::{data_error, file_error, general_error};
 use std::io::{self, BufRead, BufWriter, Write};
 use std::path::Path;
 use std::process;
@@ -25,29 +26,24 @@ use std::{collections, fs};
 /// The last line is the most recent directory pushed.
 ///
 pub fn pushd(histpath: &str, path: &str) {
-    match fs::canonicalize(path) {
-        Err(er) => user_error!("{path} doesn't exist: {er}"),
-        Ok(absolute_path) if !absolute_path.exists() || !absolute_path.is_dir() => {
-            user_error!("{path} is not a directory");
-        }
-        Ok(absolute_path) => {
-            fs::write(
-                histpath,
-                format!(
-                    "{}\n{};{};{}",
-                    fs::read_to_string(histpath)
-                        .read_error(histpath, None)
-                        .trim(),
-                    absolute_path.to_string_lossy(),
-                    process::id(),
-                    time::SystemTime::now()
-                        .duration_since(time::UNIX_EPOCH)
-                        .internal_error("Time went backwards.", None)
-                        .as_secs(),
-                ),
-            )
-            .write_error(histpath);
-        }
+    let std_path_string = std_path(path);
+    if Path::new(&std_path_string).exists() {
+        fs::write(
+            histpath,
+            format!(
+                "{}\n{};{};{}",
+                fs::read_to_string(histpath)
+                    .read_error(histpath, None)
+                    .trim(),
+                &std_path_string,
+                process::id(),
+                time::SystemTime::now()
+                    .duration_since(time::UNIX_EPOCH)
+                    .internal_error("Time went backwards.", None)
+                    .as_secs(),
+            ),
+        )
+        .write_error(histpath);
     }
 }
 

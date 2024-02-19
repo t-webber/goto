@@ -220,6 +220,7 @@ fn add(dirline: &DirsLine, success: &mut bool, new_short: &str, path: &str) -> S
 fn edit(dirline: &DirsLine, success: &mut bool, short: &str, path: &str) -> String {
     if dirline.path == path {
         user_error!("Path already exists");
+        *success = true;
         dirline.join(";")
     } else if dirline.shorts.contains(&short) {
         *success = true;
@@ -356,13 +357,15 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
         _ if success => (),
         Cmd::Reset | Cmd::Decr(_) => (),
         Cmd::Add(ShortPath{path: None, ..}) => user_error!("Missing path to <-add>"),
-        Cmd::Add(ShortPath{short: opt_short, path: Some(path)}) =>
+        Cmd::Edit(ShortPath{path: None, ..}) => user_error!("Shortcut not found, and missing path to <-edit>"),
+        Cmd::Add(ShortPath{short: opt_short, path: Some(path)}) | Cmd::Edit(ShortPath{short: opt_short, path: Some(path)}) =>
             match opt_short.as_ref() {
                 Some(short) => write!(data, "{};{};0", &path, short).write_error("Lines"),
                 None => user_error!("Missing shortut to add"),
             },
 
-        Cmd::Edit(_) | Cmd::Rm(_) | Cmd::Del(_) => user_error!("Invalid command line: {args:?}"),
+        Cmd::Rm(_) => user_error!("Failed to remove shortcut: not found"),
+        Cmd::Del(_) => user_error!("Failed to delete path: not found"),
         };
     }
 
