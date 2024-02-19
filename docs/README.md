@@ -8,7 +8,7 @@ It works on [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 ## Usage
 
-You can find examples and documentation [here](../rust_doc/debug/doc/goto/index.html).
+You can find examples and documentation [here](../rust_doc/doc/goto/index.html).
 
 ## Requirements
 

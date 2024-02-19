@@ -1,6 +1,7 @@
-use std::fmt;
-use crate::user_error;
-use std::mem;
+use crate::{user_error, general_error};
+use core::fmt;
+use core::mem;
+use crate::errors::SingleError;
 
 /// Contains the shortcut and the path.
 /// Is used to store them and to pass them to a Cmd element.
@@ -36,6 +37,8 @@ pub enum Cmd {
     /// Reset the usage of all directories to 0.
     Reset,
 }
+
+
 
 impl fmt::Display for Cmd {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -155,11 +158,25 @@ impl ToCmd for String {
     }
 }
 
-
+/// Function to get the directory from a path.
+/// # Arguments
+/// * `path` - The path to get the directory from.
+/// # Returns
+/// The directory.
+/// # Examples
+/// ```
+/// let dir = path2dir("C:/Users/username/Documents");
+/// assert_eq!(dir, "Documents");
+/// ```
 fn path2dir(path: &str) -> String {
-  path.split('/').last().unwrap().split('\\').last().unwrap().to_string()
+    path.split('/')
+        .last()
+        .internal_error("The path is not valid", None)
+        .split('\\')
+        .last()
+        .internal_error("The path is still not valid", None)
+        .to_owned()
 }
-
 
 /// Function to format a path
 /// # Arguments
@@ -173,30 +190,46 @@ fn path2dir(path: &str) -> String {
 ///
 fn std_path(path: &str) -> String {
     let mut to_lower = true;
-    path.chars().map(|char| match char {
-        '\\' => { to_lower = false; '/'},
-        ':' | '/' if to_lower => { to_lower = false; char},
-        _ if to_lower => char.to_ascii_lowercase(),
-        _ => char,
-    }).collect()
+    let mut res = path.chars()
+        .map(|char| match char {
+            '\\' => {
+                to_lower = false;
+                '/'
+            }
+            ':' | '/' if to_lower => {
+                to_lower = false;
+                char
+            }
+            _ if to_lower => char.to_ascii_lowercase(),
+            _ => char,
+        })
+        .collect::<String>();
+    if res.ends_with('/') {
+        res.pop();
+    } 
+    res    
 }
 
+/// Trait to append a default value to a command.
 pub trait AppendDefault {
-  fn append_default(self, value: &str);
+    /// Lone method of the trait.
+    fn append_default(self, value: &str);
 }
 
 impl AppendDefault for Option<&mut Cmd> {
     fn append_default(self, value: &str) {
         if let Some(cmd) = self {
-          match cmd {
-              Cmd::Get(ShortPath { short: None, path: None}) | Cmd::Add(ShortPath { short: None, path: None})
-              | Cmd::Edit(ShortPath { short: None, path: None}) => { cmd.append(path2dir(value)); cmd.append(value.to_string());},
-              Cmd::Get(ShortPath{path: None, ..}) | Cmd::Add(ShortPath{path: None, ..})
-              | Cmd::Edit(ShortPath{path: None, ..}) => cmd.append(value.to_string()),
-                Cmd::Rm(short) if short.is_empty() => todo!(),
-                Cmd::Del(path) if path.is_empty() => todo!(),
-                Cmd::Decr(0) => todo!(),
-                _ => (),
+            #[rustfmt::skip]
+            match cmd {
+                Cmd::Add(ShortPath {short: None, path: None})
+                | Cmd::Edit(ShortPath {short: None, path: None}) => {
+                    cmd.append(path2dir(value)); cmd.append(value.to_owned());
+                }
+                Cmd::Add(ShortPath { path: None, .. })
+                | Cmd::Edit(ShortPath { path: None, .. }) => cmd.append(value.to_owned()),
+
+                Cmd::Get(_) | Cmd::Add(_) | Cmd::Edit(_) 
+                | Cmd::Rm(_) | Cmd::Del(_) | Cmd::Decr(_) | Cmd::Reset => (),
             }
         }
     }
