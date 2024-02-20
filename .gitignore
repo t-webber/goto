@@ -2,10 +2,9 @@ build/
 target/
 tests/
 lib/
-rust_doc/debug
-rust_doc/.rust*
+rust_doc/.rustc_info.json
 rust_doc/CACHEDIR.TAG
-debug/
+rust_doc/.rustdoc_fingerprint.json
 release/goto.exe
 release/goto
-tools/
+temp/

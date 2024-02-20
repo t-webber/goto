@@ -1,4 +1,9 @@
-$path=$(Invoke-Expression "gt.ps1 $args[0] $args[1] -get")
+# $in = $args[0]
+# $inn = $args[1]
+
+$path=$(Invoke-Expression "gtexe  $args -get")
 $path = $path -replace '\\', '/'
-$path = '/mnt/' + $path -replace ':', '' -replace 'files', 'Files'
-Code.exe --remote wsl+Debian $path
+$path = '/mnt/' + $path -replace ':', ''
+# Write-Host "Remote: $path"
+# Sleep 1
+Invoke-Expression "Code.exe --remote wsl+Debian $path"

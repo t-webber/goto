@@ -1,23 +1,18 @@
-if (!$PSScriptRoot) {
-  Write-Host "Goto cannot be used as executable."
-}
+if (!$PSScriptRoot) { Write-Error "Goto cannot be used as executable, as it needs to be run in the current process." ; return }
 
-$res = $( Invoke-Expression "$PSScriptRoot\goto.exe $args" )
-
+$res = Invoke-Expression "$PSScriptRoot\goto.exe $args" 
 $res = $res -split '#'
 
-
-if ($res.length -gt 3) {
-  foreach ($line in $res) {
-    Write-Host $line
-  }
+if ($res.length -gt 3 -and $res[0] -ne "0") {
+  return $res
 }
 
-if ($res[1] -eq "0") {
-  Set-Location $res[2]
-} elseif ($res[1] -eq "1") {
-  return $res[2]
+if ($res[1] -eq "1") {
+  return $res[2] 
 }
+
 if ($res[0] -eq "1") {
-  Clear-Host
+  return
 }
+
+Set-Location $res[2]

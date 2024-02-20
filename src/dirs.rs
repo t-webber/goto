@@ -2,27 +2,44 @@ use core::fmt::Write;
 use std::fs;
 use std::process;
 
-use crate::global::Cmd;
-use crate::user_error;
-// Imports
+use crate::commands::{Cmd, ShortPath};
+use crate::errors::{ReadError, SingleError, WriteError};
+use crate::{general_error, user_error};
+
+/// Trait to read a vector of a line of the directory file
+/// Enables to get path, shortuts, priority from a dline
+trait ReadVec {
+    /// Get the path of the directory
+    fn join_elts(&self, deb: usize, offset: usize, msgf: &str) -> String;
+}
+
+impl ReadVec for Vec<&str> {
+    fn join_elts(&self, deb: usize, offset: usize, msg: &str) -> String {
+        let x = self
+            .get(deb..self.len().checked_sub(offset).data_error(msg, None))
+            .data_error(msg, None);
+        x.join(";")
+    }
+}
 
 /// Structure to contain the state of the search
 #[derive(Default, Debug)]
 struct SearchState {
-    /// If a path was found for the given shortcut, `correct` contains the path.
+    /// If a path was found for the given shortut, `correct` contains the path.
     correct: Option<String>,
-    /// If a path was not found for the given shortcut, `prioritised` contains the path with the highest priority.
+    /// If a path was not found for the given shortut, `prioritised` contains the path with the highest priority.
     prioritised: Option<String>,
     /// The highest priority found.
     max_priory: u32,
 }
 
 /// Structure to contain the data of a line in the directory file
+#[derive(Debug)]
 struct DirsLine<'dirline> {
     /// The path of the directory
     path: &'dirline str,
-    /// The shortcuts of the directory
-    shortcs: &'dirline [&'dirline str],
+    /// The shortuts of the directory
+    shorts: &'dirline [&'dirline str],
     /// The priority of the directory
     priory: u32,
     /// The priority of the directory incremented by `incr` (see `GlobalData`)
@@ -36,7 +53,7 @@ impl<'dirline> DirsLine<'dirline> {
             "{}{}{}{}{}",
             self.path,
             sep,
-            self.shortcs.join(sep),
+            self.shorts.join(sep),
             sep,
             self.priory
         )
@@ -48,7 +65,7 @@ impl<'dirline> DirsLine<'dirline> {
 /// * `dirline` - The line of the directory file
 /// * `success` - A mutable reference to a boolean to indicate if the path was found
 /// * `sstate` - A mutable reference to the state of the search
-/// * `shortc` - The shortcut to search for
+/// * `short` - The shortut to search for
 /// # Returns
 /// The line of the directory file
 /// # Note
@@ -60,29 +77,29 @@ impl<'dirline> DirsLine<'dirline> {
 /// let mut sstate = SearchState::default();
 /// let dirline = DirsLine {
 ///    path: "/home/user/folder",
-///    shortcs: &["f", "folder"],
+///    shorts: &["f", "folder"],
 ///    priory: 1,
 ///    priory2: 2,
 /// };
 /// let path = get(&dirline, &mut success, &mut sstate, "f");
 /// ```
 /// # Panics
-/// If the shortcut is not found in the line
+/// If the shortut is not found in the line
 /// # Note
 /// The directory file is a simple text file with the following format:
 /// ```text
 /// /home/user/folder;f;folder;1
 /// /home/user/folder2;f2;folder2;2
 /// ```
-/// Where the first field is the path of the directory, the second field is the shortcuts of the directory, the third field is the priority of the directory.
+/// Where the first field is the path of the directory, the second field is the shortuts of the directory, the third field is the priority of the directory.
 /// The last line is the most recent directory pushed.
 /// 
 #[rustfmt::skip]
-fn get(dirline: &DirsLine, success: &mut bool, sstate: &mut SearchState, shortc: &str) -> String {
-    if dirline.shortcs.contains(&shortc) {
+fn get(dirline: &DirsLine, success: &mut bool, sstate: &mut SearchState, short: &str) -> String {
+    if dirline.shorts.contains(&short) {
         sstate.correct = Some(String::from(dirline.path));
         *success = true;
-        format!("{};{};{}", dirline.path, dirline.shortcs.join(";"), dirline.priory2)
+        format!("{};{};{}", dirline.path, dirline.shorts.join(";"), dirline.priory2)
     } else {
         if dirline.priory > sstate.max_priory {
             sstate.max_priory = dirline.priory;
@@ -92,11 +109,11 @@ fn get(dirline: &DirsLine, success: &mut bool, sstate: &mut SearchState, shortc:
     }
 }
 
-/// Function to remove a shortcut from a line of the directory file
+/// Function to remove a shortut from a line of the directory file
 /// # Arguments
 /// * `dirline` - The line of the directory file
-/// * `success` - A mutable reference to a boolean to indicate if the shortcut was found
-/// * `shortc` - The shortcut to remove
+/// * `success` - A mutable reference to a boolean to indicate if the shortut was found
+/// * `short` - The shortut to remove
 /// # Returns
 /// The line of the directory file
 /// # Example
@@ -104,29 +121,29 @@ fn get(dirline: &DirsLine, success: &mut bool, sstate: &mut SearchState, shortc:
 /// let mut success = false;
 /// let dirline = DirsLine {
 ///   path: "/home/user/folder",
-///  shortcs: &["f", "folder"],
+///  shorts: &["f", "folder"],
 /// priory: 1,
 /// priory2: 2,
 /// };
 /// let line = remove(&dirline, &mut success, "f");
 /// ```
 /// # Panics
-/// If the shortcut is not found in the line
+/// If the shortut is not found in the line
 /// # Note
 ///
-fn remove(dirline: &DirsLine, success: &mut bool, shortc: &str) -> String {
-    if dirline.shortcs.contains(&shortc) {
+fn remove(dirline: &DirsLine, success: &mut bool, short: &str) -> String {
+    if dirline.shorts.contains(&short) {
         *success = true;
-        if dirline.shortcs.len() == 1 {
+        if dirline.shorts.len() == 1 {
             return String::new();
         }
         format!(
             "{};{};{}",
             dirline.path,
             dirline
-                .shortcs
+                .shorts
                 .iter()
-                .filter(|&&sh| sh != shortc)
+                .filter(|&&sh| sh != short)
                 .copied()
                 .collect::<Vec<_>>()
                 .join(";"),
@@ -137,11 +154,11 @@ fn remove(dirline: &DirsLine, success: &mut bool, shortc: &str) -> String {
     }
 }
 
-/// Function to add a shortcut to a line of the directory file
+/// Function to add a shortut to a line of the directory file
 /// # Arguments
 /// * `dirline` - The line of the directory file
-/// * `success` - A mutable reference to a boolean to indicate if the shortcut was added
-/// * `new_shortc` - The new shortcut to add
+/// * `success` - A mutable reference to a boolean to indicate if the shortut was added
+/// * `new_short` - The new shortut to add
 /// * `path` - The path of the directory
 /// # Returns
 /// The line of the directory file
@@ -150,28 +167,28 @@ fn remove(dirline: &DirsLine, success: &mut bool, shortc: &str) -> String {
 /// let mut success = false;
 /// let dirline = DirsLine {
 ///   path: "/home/user/folder",
-///   shortcs: &["f", "folder"],
+///   shorts: &["f", "folder"],
 ///   priory: 1,
 ///   priory2: 2,
 /// };
 /// let line = add(&dirline, &mut success, "f2", "/home/user/folder");
 /// ```
 /// # Panics
-/// If the shortcut already exists
-fn add(dirline: &DirsLine, success: &mut bool, new_shortc: &str, path: &str) -> String {
-    if dirline.shortcs.contains(&new_shortc) {
-        user_error!("Shortcut {new_shortc} already exists");
+/// If the shortut already exists
+fn add(dirline: &DirsLine, success: &mut bool, new_short: &str, path: &str) -> String {
+    if dirline.shorts.contains(&new_short) {
+        user_error!("Shortcut {new_short} already exists");
         *success = true;
         dirline.join(";")
     } else if path == dirline.path {
         *success = true;
-        if dirline.shortcs.contains(&new_shortc) {
-            user_error!("shortc already exists");
+        if dirline.shorts.contains(&new_short) {
+            user_error!("Shortcut {new_short} already exists");
             dirline.join(";")
         } else {
             format!(
-                "{path};{};{new_shortc};{}",
-                dirline.shortcs.join(";"),
+                "{path};{};{new_short};{}",
+                dirline.shorts.join(";"),
                 dirline.priory2
             )
         }
@@ -182,8 +199,8 @@ fn add(dirline: &DirsLine, success: &mut bool, new_shortc: &str, path: &str) -> 
 
 /// # Arguments
 /// * `dirline` - The line of the directory file
-/// * `success` - A mutable reference to a boolean to indicate if the shortcut was edited
-/// * `shortc` - The new shortcut
+/// * `success` - A mutable reference to a boolean to indicate if the shortut was edited
+/// * `short` - The new shortut
 /// * `path` - The path of the directory
 /// # Returns
 /// The line of the directory file
@@ -192,7 +209,7 @@ fn add(dirline: &DirsLine, success: &mut bool, new_shortc: &str, path: &str) -> 
 /// let mut success = false;
 /// let dirline = DirsLine {
 ///   path: "/home/user/folder",
-///   shortcs: &["f", "folder"],
+///   shorts: &["f", "folder"],
 ///   priory: 1,  
 ///   priory2: 2,
 /// };
@@ -200,30 +217,17 @@ fn add(dirline: &DirsLine, success: &mut bool, new_shortc: &str, path: &str) -> 
 /// # Panics
 /// If the path already exists
 ///
-fn edit(dirline: &DirsLine, success: &mut bool, shortc: &str, path: &str) -> String {
+fn edit(dirline: &DirsLine, success: &mut bool, short: &str, path: &str) -> String {
     if dirline.path == path {
-        panic!("Path already exists");
-    } else if dirline.shortcs.contains(&shortc) {
+        user_error!("Path already exists");
         *success = true;
-        format!("{path};{};{}", dirline.shortcs.join(";"), dirline.priory)
+        dirline.join(";")
+    } else if dirline.shorts.contains(&short) {
+        *success = true;
+        format!("{path};{};{}", dirline.shorts.join(";"), dirline.priory)
     } else {
         dirline.join(";")
     }
-}
-
-/// Function to format a path
-/// # Arguments
-/// * `path` - The path to format
-/// # Returns
-/// The formatted path
-/// # Example   
-/// ```
-/// assert!(std_path(&Some(String::from("/home/user/folder/"))) == "/home/user/folder");
-/// ```
-///
-fn std_path(path: &Option<String>) -> String {
-    let somepath = path.as_ref().expect("Path not found in command line");
-    somepath.strip_suffix('/').unwrap_or(somepath).to_owned()
 }
 
 ///////////////////////////////: command keywords functions  :///////////////////////////////
@@ -262,39 +266,50 @@ fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate
         assert!(vecline.first().unwrap_or(&"").is_empty(), "Invalid rdline {rdline} found in directory library");
         String::new()
     } else {
-        let priory = vecline.last().expect("No priority found in line")
+        #[allow(clippy::expect_used)]
+        let priory = vecline.last().expect("[Data Error] Missing priority in dline.")
             .parse::<u32>()
-            .unwrap_or_else(|err| panic!("priory not in integer in line {rdline} : {err}"));
+            .data_error(format!("Priority not an integer in {rdline}"), None);
 
         let dirline = DirsLine {
-            path: vecline.first().expect("No path found in line"),
-            shortcs: vecline.get(1..vecline.len().checked_sub(1).expect("Enable to subtract")).expect("Slicing error on line : missing values."),
+            path: if let Some(pth) = vecline.first() { pth } else { return String::new() },
+            shorts: vecline.get(1..vecline.len().checked_sub(1).data_error("Unable to subtract to priority", None)).data_error("Missing values in line", None),
             priory,
-        priory2: priory.checked_add(incr).expect("Overflow on priority"),
+        priory2: priory.checked_add(incr).internal_error("Overflow on priority", None),
         };
 
         #[rustfmt::skip]
-        let line2: String = match args.first().expect("Found empty line in dirs") {
-            Cmd::Get([shortc, _]) if shortc.is_none() => get(&dirline, success, sstate, ""),
-            Cmd::Get([shortc, _]) => get(&dirline, success, sstate, shortc.as_ref().expect("No shortcut found in get command")),
+        let line2 = if let Some(first) = args.first() {
+            match first {
+            Cmd::Get(ShortPath{short: None, ..}) => get(&dirline, success, sstate, ""),
+            Cmd::Get(ShortPath{short: Some(short), ..}) => get(&dirline, success, sstate, short),
             Cmd::Reset => format!(
                 "{};{}",
-                vecline.get(0..vecline.len().checked_sub(1).expect("VLine was empty")).expect("vecline was empty").join(";"),
+                vecline.join_elts(0, 1, "Missing values in line"),
                 0
             ),
             Cmd::Decr(decr) => format!(
                 "{};{}",
-                vecline.get(0..vecline.len().checked_sub(1).expect("Invalid format of line")).expect("Format of line not valid").join(";"),
+                vecline.join_elts(0, 1, "Missing values in line"),
                 priory.saturating_sub(*decr)),
 
-            Cmd::Rm(shortc) => remove(&dirline, success, shortc),
-            Cmd::Del(path) => if *dirline.path == *path { *success = true; return String::new() } 
-                                       else { dirline.join(";") },
+            Cmd::Rm(short) => remove(&dirline, success, short),
+            Cmd::Del(path) if *dirline.path == *path => {*success = true; return String::new() },
+            Cmd::Del(_) => dirline.join(";"),
 
-            Cmd::Add([shortc, path]) => add(&dirline, success, shortc.as_ref().expect("Second argument expected to add").as_str(), &std_path(path)),
-            Cmd::Edit([shortc, path]) => edit(&dirline, success, shortc.as_ref().expect("Second argument expected to edit").as_str(), &std_path(path)),
+            Cmd::Add(ShortPath{short: None, ..} | ShortPath{path: None, ..})
+            | Cmd::Edit(ShortPath{short: None, ..} | ShortPath{path: None, ..})
+                => { user_error!("Missing shortut or path to <-add> or <-edit>"); String::new() },
 
-            // _ => panic!("Invalid command : {:?}", args),
+            Cmd::Add(ShortPath{short: Some(short), path: Some(path)}) 
+                => add(&dirline, success, short.as_str(), path),
+            Cmd::Edit(ShortPath{short: Some(short), path: Some(path)}) 
+                => edit(&dirline, success, short.as_str(), path),
+
+        }} else {
+            #[allow(clippy::print_stderr)]
+            {eprintln!("[Internal Error] No option pushed in argument list.");};
+            return String::new();
         };
 
         if line2.is_empty() { String::new() }
@@ -304,97 +319,85 @@ fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate
 
 /// Function to read the directory file
 /// # Arguments
-/// * `dirspath` - The path of the directory file
+/// * `dpath` - The path of the directory file
 /// * `args` - The arguments of the command
 /// * `incr` - The increment value
 /// # Returns
 /// The path of the directory
 /// # Example
 /// ```
-/// let dirspath = "/home/user/.dirs";
+/// let dpath = "/home/user/.dirs";
 /// let args = vec!["get".to_string(), "f".to_string()];
-/// let path = read(&dirspath, &args, 1);
+/// let path = read(&dpath, &args, 1);
 /// ```
 /// # Panics
 /// If the file is not found
 ///
-pub fn read(dirspath: &str, args: &[Cmd], incr: u32) -> Option<String> {
+pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
     let mut sstate = SearchState::default();
     let mut success = false;
 
-    let mut data: String = fs::read_to_string(dirspath)
-        .unwrap_or_else(|er| panic!("Unable to read file: {er}"))
+    let mut data: String = fs::read_to_string(dpath)
+        .read_error(dpath, None)
         .split('\n')
         .map(|dline| read_dline(dline.trim(), args, &mut success, incr, &mut sstate))
         .collect();
 
-    let temp = sstate
+    let mut res: String = sstate
         .correct
-        .clone()
-        .unwrap_or_else(|| sstate.prioritised.clone().unwrap_or_default());
-
-    let mut res: String = temp;
+        .unwrap_or_else(|| sstate.prioritised.unwrap_or_default());
+    res.push('/');
+    let mut some = false;
 
     #[rustfmt::skip]
     for arg in args { match arg {
-        Cmd::Get([shortc, path]) => {
-            if success || shortc.is_none() {
-                res = format!("{}/{}", res, path.clone().unwrap_or_default());
-            } else {
-                panic!("Shortcut {} not found.", shortc.as_ref().expect("No shortcut found in get command"));
-            };
-            return Some(res);
-        }
+        Cmd::Get(ShortPath{short: Some(short), ..}) if !success => { some = true; res = short.to_string()},
+        Cmd::Get(ShortPath{path, ..}) => { some = true; res.push_str(path.clone().unwrap_or_default().as_str())},
 
         _ if success => (),
         Cmd::Reset | Cmd::Decr(_) => (),
-        Cmd::Add([shortc, path]) => write!(
-            data,
-            "{};{};0",
-            std_path(path),
-            shortc.as_ref().expect("Missing shortcut to add")
-        )
-        .unwrap_or_else(|er| panic!("Unable to add line to data: {er}")),
+        Cmd::Add(ShortPath{path: None, ..}) => user_error!("Missing path to <-add>"),
+        Cmd::Edit(ShortPath{path: None, ..}) => user_error!("Shortcut not found, and missing path to <-edit>"),
+        Cmd::Add(ShortPath{short: opt_short, path: Some(path)}) | Cmd::Edit(ShortPath{short: opt_short, path: Some(path)}) =>
+            match opt_short.as_ref() {
+                Some(short) => write!(data, "{};{};0", &path, short).write_error("Lines"),
+                None => user_error!("Missing shortut to add"),
+            },
 
-        Cmd::Edit(_) | Cmd::Rm(_) | Cmd::Del(_) => panic!("Invalid command line: {args:?}"),
-    };
-}
-    fs::write(dirspath, data).unwrap_or_else(|er| panic!("Unable to write file: {er}"));
+        Cmd::Rm(_) => user_error!("Failed to remove shortcut: not found"),
+        Cmd::Del(_) => user_error!("Failed to delete path: not found"),
+        };
+    }
 
-    None
+    fs::write(dpath, data).write_error(dpath);
+    some.then_some(res)
 }
 
 /// Function to print state of the directories
 /// # Arguments
-/// * `dirspath` - The path of the directory file
+/// * `dpath` - The path of the directory file
 /// # Returns
 /// `None`
-/// # Example
-/// ```
-/// let dirspath = "/home/user/.dirs";
-/// let state = state(&dirspath);
-/// ```
 /// # Panics
 /// If the file is not found
 /// # Note
 /// The text will be printed in the following format:
 /// ```text
-/// afirstpath  shortcut1      shortcut2 14
+/// afirstpath  shortut1      shortut2 14
 /// asecondpath short1         short2    14
-/// third       afirstshortcut           14
+/// third       afirstshortut           14
 /// ```
 ///
-pub fn state(dirspath: &str) -> ! {
+pub fn state(dpath: &str) -> ! {
     let mut spaces: Vec<usize> = vec![];
-    let binding = fs::read_to_string(dirspath)
-        .unwrap_or_else(|er| panic!("!State! Enable to read file! {er}"));
+    let binding = fs::read_to_string(dpath).read_error(dpath, None);
     let data = binding.lines().collect::<Vec<&str>>();
     for dline in &data {
         dline.split(';').enumerate().for_each(|(idx, elt)| {
-            let new = elt.len().checked_add(1).expect("Overflow on space");
-            match spaces.get(idx) {
+            let new = elt.len().checked_add(1).unwrap_or(elt.len());
+            match spaces.get_mut(idx) {
                 Some(space) if new > *space => {
-                    *spaces.get_mut(idx).expect("Expected tab size") = new;
+                    *space = new;
                 }
                 Some(_) => (),
                 None => spaces.push(new),
@@ -406,15 +409,17 @@ pub fn state(dirspath: &str) -> ! {
     let mut state = String::new();
     for dline in &data {
         let mut sline = dline.split(';').collect::<Vec<&str>>();
-        let priory = sline.pop().expect("Empty line found in dirs");
-        let mut str1 = String::new();
-        sline.iter().enumerate().for_each(|(idx, elt)| {
-            let space = spaces.get(idx).unwrap_or(&0);
-            write!(&mut str1, "{elt:<space$}")
-                .unwrap_or_else(|er| panic!("Unable to write to string: {er}"));
-        });
-        writeln!(state, "{str1:<total_space$}{priory}")
-            .unwrap_or_else(|er| panic!("Unable to write to string: {er}"));
+        match sline.pop() {
+            None => continue,
+            Some(priory) => {
+                let mut str1 = String::new();
+                sline.iter().enumerate().for_each(|(idx, elt)| {
+                    let space = spaces.get(idx).unwrap_or(&0);
+                    write!(&mut str1, "{elt:<space$}").write_error("line");
+                });
+                writeln!(state, "{str1:<total_space$}{priory}").write_error("lines");
+            }
+        }
     }
 
     #[allow(clippy::print_stdout)]

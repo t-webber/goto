@@ -1,16 +1,18 @@
-loc=/mnt/w/files/dev/rust/goto/release/goto
+loc=$(dirname $0)
+loc=$loc"/goto"
 res=$(eval "$loc $1 $2 $3 $4 $5 $6 $7 $8 $9")
+if [[ $res == *"#"* ]]; then
+    still=${res:0:1}
+    get=${res:2:1}
+    path=${res:4}
 
-clear=${res:0:1}
-get=${res:2:1}
-path=${res:4}
-
-if [[ $clear -eq "1" ]]; then
-    clear
-fi
-
-if [[ $get -eq "0" ]]; then
-    cd $path
+    if [[ $get == "1" ]]; then
+        echo $res[2]
+    else
+        if [[ $still != "1" ]]; then
+            cd $path
+        fi
+    fi
 else
-    echo $path
+    echo "$res"
 fi
