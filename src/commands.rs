@@ -43,23 +43,18 @@ pub enum Cmd {
 impl fmt::Display for Cmd {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         let val = match self {
-            Self::Get(ShortPath { short, path }) => {
-                format!(
-                    "<goto {} {}>",
-                    &short.clone().unwrap_or_default(),
-                    &path.clone().unwrap_or_default()
-                )
+            Self::Get(ShortPath { short, path }) => { 
+                    format!("<goto {} {}>",
+                        &short.clone().unwrap_or_default(), 
+                        &path.clone().unwrap_or_default()) 
             }
             Self::Add(ShortPath { short, path }) => {
-                format!(
-                    "<add {} {}>",
+                format!("<add {} {}>",
                     &short.clone().unwrap_or_default(),
-                    &path.clone().unwrap_or_default()
-                )
+                    &path.clone().unwrap_or_default())
             }
             Self::Edit(ShortPath { short, path }) => {
-                format!(
-                    "<edit {} {}>",
+                format!("<edit {} {}>",
                     &short.clone().unwrap_or_default(),
                     &path.clone().unwrap_or_default()
                 )
@@ -104,7 +99,7 @@ impl Cmd {
             }
 
             Self::Get(ShortPath{short: None, ..}) => *self = Self::Get(ShortPath{short: Some(value), path: None}),
-            Self::Get(ShortPath{short,path: None}) => *self = Self::Get(ShortPath{short, path: Some(std_path(&value))}),
+            Self::Get(ShortPath{short,path: None}) => *self = Self::Get(ShortPath{short, path: Some(value)}),
 
             Self::Add(ShortPath{short: None, ..}) => *self = Self::Add(ShortPath{short: Some(value), path: None}),
             Self::Add(ShortPath{short, path: None}) => *self = Self::Add(ShortPath{short, path: Some(std_path(&value))}),
@@ -194,7 +189,7 @@ pub fn std_path(ipath: &str) -> String {
     path = path.replace("..", father);
     match path.chars().next() {
         None => path = here,
-        Some('.') => path = father.to_owned() + &path[1..],
+        Some('.') => path = format!("{here}{}", &path[1..]),
         Some('/') => (),
         _ if path.chars().nth(1) == Some(':') => (),
         _ => path = format!("{here}/{path}"),

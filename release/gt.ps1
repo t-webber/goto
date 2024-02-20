@@ -3,7 +3,6 @@ if (!$PSScriptRoot) { Write-Error "Goto cannot be used as executable, as it need
 $res = Invoke-Expression "$PSScriptRoot\goto.exe $args" 
 $res = $res -split '#'
 
-
 if ($res.length -gt 3 -and $res[0] -ne "0") {
   return $res
 }

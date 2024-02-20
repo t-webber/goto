@@ -1,7 +1,7 @@
 # $in = $args[0]
 # $inn = $args[1]
 
-$path=$(Invoke-Expression "gt.ps1  $args -get")
+$path=$(Invoke-Expression "gtexe  $args -get")
 $path = $path -replace '\\', '/'
 $path = '/mnt/' + $path -replace ':', ''
 # Write-Host "Remote: $path"

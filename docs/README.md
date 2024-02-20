@@ -2,9 +2,13 @@
 
 ## Overview
 
-This is a simple tool to help you navigate to a location in your file system. It is a simple wrapper around `cd` and `ls` commands. It is designed to be used in a shell environment. It is written in `Rust` and is cross-platform.
+This is a simple tool to help you navigate to a location in your file system. It is a simple wrapper around the `cd` command. It is designed to be used in a shell environment.
 
-It works on [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
+A tool is also provided to open `VSCode` in a specific location: `gtc`. You can run it in the `run` window (`windows`+`R`) or in any terminal. Thanks to `gtc`, you can directly open your project with `VSCode` without having to navigate to the project folder. If you are on `WSL`, you can use `wgtc` to open the project in `VSCode` in a remote `WSL` window.
+
+You will also found a `expl` script: it opens a specific location in the file explorer. In the same way than `gtc`, you can use `expl` in the `run` window or in any terminal.
+
+It is written in `Rust` and is cross-platform, available on Windows and Unix-based systems. It also works on [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
 
 ## Usage
 
@@ -12,34 +16,41 @@ You can find examples and documentation [here](../rust_doc/doc/goto/index.html).
 
 ## Requirements
 
-You need to have `rustc` and `cargo` installed on your system. You can install it from [here](https://www.rust-lang.org/tools/install).
+You need to have `rustc` and `cargo` installed on your system. You can install them from [here](https://www.rust-lang.org/tools/install).
 
-If you are on Windows, the usage of `goto` requires script authorization. See [here](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4) for more information.
+If you are on Windows, the usage of `goto` requires script authorization. See [here](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4) for more information. If you don't want to change the execution, you can still use the `gtc` and `wgtc`.
 
 ## Installation
 
-1. Initialize the libraries and compile the project:
+1. Clone the projet
+
+```bash
+git clone https://www.github.com/t-webber/goto.git
+cd goto
+```
+
+2. Initialize the libraries:
 
 ```bash
 # sal touch ni # <-- add this line if you are on powershell
-mkdir release
-touch release/dirs.csv
-touch release/hist.csv
+mkdir lib
+touch lib/dirs.csv
+touch lib/hist.csv
 ```
 
-2. Compile the project
+3. Compile the project
 
 ```bash
 cargo build --release
 ```
 
-3. Move the executable to `release`:
+4. Move the executable to `release`:
 
 ```bash
 cp ./target/debug/goto* ./release
 ```
 
-4. Add the `release` folder to your `PATH` environment variable.
+5. Add the `release` folder to your `PATH` environment variable.
 
    - On a Unix based OS: `echo "export PATH=$(pwd)/release/:PATH" >> ~/.bashrc`
    - On Windows:
@@ -47,10 +58,13 @@ cp ./target/debug/goto* ./release
      - Open the start menu
      - Tap `env` and select `Environment Variables`
      - Click on `Environment Variables` in the bottom right corner
-     - Click on `Path` in the user environment variables (first half of the windows)
+     - Click on `Path` in the `User environment variables` (first half of the windows)
      - Click on `Edit`, then `New` on the right, and add the copied path
      - Then click on `OK`, `OK`, `OK` and restart the terminal
 
-5. If you are on a Unix-type OS, run `chmod +x release/goto` to make the file executable.
+6. Make the file executable:
 
-6. Change the first line of the `release/gt` file (the `loc` variable) to your current directory.
+   - On a Unix based OS: `chmod +x release/goto`
+   - On Windows: the usage of `goto` requires script authorization. See [here](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-7.4) for more information. If you don't want to change the execution, you can still use the `gtc` and `wgtc` by compiling gt.ps1
+
+7. Change the first line of the `release/gt` file (the `loc` variable) to your current directory.

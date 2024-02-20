@@ -1,2 +1,2 @@
-$x = Invoke-Expression "gt.ps1 -get $args"
-start $x
+$x = Invoke-Expression "gtexe -get $args"
+Start-Process $x

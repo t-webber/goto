@@ -7,5 +7,4 @@ rust_doc/CACHEDIR.TAG
 rust_doc/.rustdoc_fingerprint.json
 release/goto.exe
 release/goto
-release/gt.exe
 temp/
