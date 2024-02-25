@@ -93,13 +93,16 @@ impl<'dirline> DirsLine<'dirline> {
 /// ```
 /// Where the first field is the path of the directory, the second field is the shortuts of the directory, the third field is the priority of the directory.
 /// The last line is the most recent directory pushed.
-/// 
-#[rustfmt::skip]
 fn get(dirline: &DirsLine, success: &mut bool, sstate: &mut SearchState, short: &str) -> String {
     if dirline.shorts.contains(&short) {
         sstate.correct = Some(String::from(dirline.path));
         *success = true;
-        format!("{};{};{}", dirline.path, dirline.shorts.join(";"), dirline.priory2)
+        format!(
+            "{};{};{}",
+            dirline.path,
+            dirline.shorts.join(";"),
+            dirline.priory2
+        )
     } else {
         if dirline.priory > sstate.max_priory {
             sstate.max_priory = dirline.priory;
@@ -251,69 +254,106 @@ fn edit(dirline: &DirsLine, success: &mut bool, short: &str, path: &str) -> Stri
 /// ```
 /// # Panics
 /// If the command is invalid
-/// 
-#[rustfmt::skip]
-fn read_dline( rdline: &str, args: &[Cmd], success: &mut bool, incr: u32, sstate: &mut SearchState ) -> String {
-
+fn read_dline(
+    rdline: &str,
+    args: &[Cmd],
+    success: &mut bool,
+    incr: u32,
+    sstate: &mut SearchState,
+) -> String {
     if *success {
         if rdline.trim().is_empty() {
             return String::new();
-        } 
+        }
         return format!("{rdline}\n");
     }
     let vecline: Vec<&str> = rdline.split(';').collect();
     if vecline.len() < 2 {
-        assert!(vecline.first().unwrap_or(&"").is_empty(), "Invalid rdline {rdline} found in directory library");
+        assert!(
+            vecline.first().unwrap_or(&"").is_empty(),
+            "Invalid rdline {rdline} found in directory library"
+        );
         String::new()
     } else {
         #[allow(clippy::expect_used)]
-        let priory = vecline.last().expect("[Data Error] Missing priority in dline.")
+        let priory = vecline
+            .last()
+            .expect("[Data Error] Missing priority in dline.")
             .parse::<u32>()
             .data_error(format!("Priority not an integer in {rdline}"), None);
 
         let dirline = DirsLine {
-            path: if let Some(pth) = vecline.first() { pth } else { return String::new() },
-            shorts: vecline.get(1..vecline.len().checked_sub(1).data_error("Unable to subtract to priority", None)).data_error("Missing values in line", None),
+            path: if let Some(pth) = vecline.first() {
+                pth
+            } else {
+                return String::new();
+            },
+            shorts: vecline
+                .get(
+                    1..vecline
+                        .len()
+                        .checked_sub(1)
+                        .data_error("Unable to subtract to priority", None),
+                )
+                .data_error("Missing values in line", None),
             priory,
-        priory2: priory.checked_add(incr).internal_error("Overflow on priority", None),
+            priory2: priory
+                .checked_add(incr)
+                .internal_error("Overflow on priority", None),
         };
 
-        #[rustfmt::skip]
         let line2 = if let Some(first) = args.first() {
             match first {
-            Cmd::Get(ShortPath{short: None, ..}) => get(&dirline, success, sstate, ""),
-            Cmd::Get(ShortPath{short: Some(short), ..}) => get(&dirline, success, sstate, short),
-            Cmd::Reset => format!(
-                "{};{}",
-                vecline.join_elts(0, 1, "Missing values in line"),
-                0
-            ),
-            Cmd::Decr(decr) => format!(
-                "{};{}",
-                vecline.join_elts(0, 1, "Missing values in line"),
-                priory.saturating_sub(*decr)),
+                Cmd::Get(ShortPath { short: None, .. }) => get(&dirline, success, sstate, ""),
+                Cmd::Get(ShortPath {
+                    short: Some(short), ..
+                }) => get(&dirline, success, sstate, short),
+                Cmd::Reset => format!(
+                    "{};{}",
+                    vecline.join_elts(0, 1, "Missing values in line"),
+                    0
+                ),
+                Cmd::Decr(decr) => format!(
+                    "{};{}",
+                    vecline.join_elts(0, 1, "Missing values in line"),
+                    priory.saturating_sub(*decr)
+                ),
 
-            Cmd::Rm(short) => remove(&dirline, success, short),
-            Cmd::Del(path) if *dirline.path == *path => {*success = true; return String::new() },
-            Cmd::Del(_) => dirline.join(";"),
+                Cmd::Rm(short) => remove(&dirline, success, short),
+                Cmd::Del(path) if *dirline.path == *path => {
+                    *success = true;
+                    return String::new();
+                }
+                Cmd::Del(_) => dirline.join(";"),
 
-            Cmd::Add(ShortPath{short: None, ..} | ShortPath{path: None, ..})
-            | Cmd::Edit(ShortPath{short: None, ..} | ShortPath{path: None, ..})
-                => { user_error!("Missing shortut or path to <-add> or <-edit>"); String::new() },
+                Cmd::Add(ShortPath { short: None, .. } | ShortPath { path: None, .. })
+                | Cmd::Edit(ShortPath { short: None, .. } | ShortPath { path: None, .. }) => {
+                    user_error!("Missing shortut or path to <-add> or <-edit>");
+                    String::new()
+                }
 
-            Cmd::Add(ShortPath{short: Some(short), path: Some(path)}) 
-                => add(&dirline, success, short.as_str(), path),
-            Cmd::Edit(ShortPath{short: Some(short), path: Some(path)}) 
-                => edit(&dirline, success, short.as_str(), path),
-
-        }} else {
+                Cmd::Add(ShortPath {
+                    short: Some(short),
+                    path: Some(path),
+                }) => add(&dirline, success, short.as_str(), path),
+                Cmd::Edit(ShortPath {
+                    short: Some(short),
+                    path: Some(path),
+                }) => edit(&dirline, success, short.as_str(), path),
+            }
+        } else {
             #[allow(clippy::print_stderr)]
-            {eprintln!("[Internal Error] No option pushed in argument list.");};
+            {
+                eprintln!("[Internal Error] No option pushed in argument list.");
+            };
             return String::new();
         };
 
-        if line2.is_empty() { String::new() }
-        else { format!("{line2}\n") }
+        if line2.is_empty() {
+            String::new()
+        } else {
+            format!("{line2}\n")
+        }
     }
 }
 
@@ -348,29 +388,54 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
         .unwrap_or_else(|| sstate.prioritised.unwrap_or_default());
     res.push('/');
     let mut some = false;
+    let mut here = None;
 
-    #[rustfmt::skip]
-    for arg in args { match arg {
-        Cmd::Get(ShortPath{short: Some(short), ..}) if !success => { some = true; res = short.to_string()},
-        Cmd::Get(ShortPath{path, ..}) => { some = true; res.push_str(path.clone().unwrap_or_default().as_str())},
-
-        _ if success => (),
-        Cmd::Reset | Cmd::Decr(_) => (),
-        Cmd::Add(ShortPath{path: None, ..}) => user_error!("Missing path to <-add>"),
-        Cmd::Edit(ShortPath{path: None, ..}) => user_error!("Shortcut not found, and missing path to <-edit>"),
-        Cmd::Add(ShortPath{short: opt_short, path: Some(path)}) | Cmd::Edit(ShortPath{short: opt_short, path: Some(path)}) =>
-            match opt_short.as_ref() {
+    for arg in args {
+        match arg {
+            // Cmd::Get(ShortPath {
+            //     short: Some(short), ..
+            // }) if !success => {
+            //     some = false;
+            //     res = None;
+            // }
+            Cmd::Get(ShortPath { short, path }) => {
+                if here.is_none() {
+                    here = (*short).clone();
+                }
+                if success {
+                    some = true;
+                    res.push_str((*path).clone().unwrap_or_default().as_str());
+                }
+            }
+            _ if success => (),
+            Cmd::Reset | Cmd::Decr(_) => (),
+            Cmd::Add(ShortPath { path: None, .. }) => user_error!("Missing path to <-add>"),
+            Cmd::Edit(ShortPath { path: None, .. }) => {
+                user_error!("Shortcut not found, and missing path to <-edit>");
+            }
+            Cmd::Add(ShortPath {
+                short: opt_short,
+                path: Some(path),
+            })
+            | Cmd::Edit(ShortPath {
+                short: opt_short,
+                path: Some(path),
+            }) => match opt_short.as_ref() {
                 Some(short) => write!(data, "{};{};0", &path, short).write_error("Lines"),
                 None => user_error!("Missing shortut to add"),
             },
 
-        Cmd::Rm(_) => user_error!("Failed to remove shortcut: not found"),
-        Cmd::Del(_) => user_error!("Failed to delete path: not found"),
+            Cmd::Rm(_) => user_error!("Failed to remove shortcut: not found"),
+            Cmd::Del(_) => user_error!("Failed to delete path: not found"),
         };
     }
 
     fs::write(dpath, data).write_error(dpath);
-    some.then_some(res)
+    if some {
+        Some(res)
+    } else {
+        here
+    }
 }
 
 /// Function to print state of the directories

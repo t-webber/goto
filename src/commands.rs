@@ -1,7 +1,7 @@
-use crate::{user_error, general_error};
+use crate::errors::SingleError;
+use crate::{general_error, user_error};
 use core::fmt;
 use core::mem;
-use crate::errors::SingleError;
 
 /// Contains the shortcut and the path.
 /// Is used to store them and to pass them to a Cmd element.
@@ -38,23 +38,26 @@ pub enum Cmd {
     Reset,
 }
 
-
-
 impl fmt::Display for Cmd {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         let val = match self {
-            Self::Get(ShortPath { short, path }) => { 
-                    format!("<goto {} {}>",
-                        &short.clone().unwrap_or_default(), 
-                        &path.clone().unwrap_or_default()) 
+            Self::Get(ShortPath { short, path }) => {
+                format!(
+                    "<goto {} {}>",
+                    &short.clone().unwrap_or_default(),
+                    &path.clone().unwrap_or_default()
+                )
             }
             Self::Add(ShortPath { short, path }) => {
-                format!("<add {} {}>",
+                format!(
+                    "<add {} {}>",
                     &short.clone().unwrap_or_default(),
-                    &path.clone().unwrap_or_default())
+                    &path.clone().unwrap_or_default()
+                )
             }
             Self::Edit(ShortPath { short, path }) => {
-                format!("<edit {} {}>",
+                format!(
+                    "<edit {} {}>",
                     &short.clone().unwrap_or_default(),
                     &path.clone().unwrap_or_default()
                 )
@@ -88,7 +91,6 @@ impl Cmd {
     /// ```
     ///
     pub fn append(&mut self, value: String) {
-        #[rustfmt::skip]
         match mem::take(self) {
             Self::Reset => user_error!("The <-reset> option takes no arguments."),
             Self::Decr(0) => {
@@ -98,20 +100,54 @@ impl Cmd {
                 }));
             }
 
-            Self::Get(ShortPath{short: None, ..}) => *self = Self::Get(ShortPath{short: Some(value), path: None}),
-            Self::Get(ShortPath{short,path: None}) => *self = Self::Get(ShortPath{short, path: Some(value)}),
+            Self::Get(ShortPath { short: None, .. }) => {
+                *self = Self::Get(ShortPath {
+                    short: Some(value),
+                    path: None,
+                });
+            }
+            Self::Get(ShortPath { short, path: None }) => {
+                *self = Self::Get(ShortPath {
+                    short,
+                    path: Some(value),
+                });
+            }
 
-            Self::Add(ShortPath{short: None, ..}) => *self = Self::Add(ShortPath{short: Some(value), path: None}),
-            Self::Add(ShortPath{short, path: None}) => *self = Self::Add(ShortPath{short, path: Some(std_path(&value))}),
+            Self::Add(ShortPath { short: None, .. }) => {
+                *self = Self::Add(ShortPath {
+                    short: Some(value),
+                    path: None,
+                });
+            }
+            Self::Add(ShortPath { short, path: None }) => {
+                *self = Self::Add(ShortPath {
+                    short,
+                    path: Some(std_path(&value)),
+                });
+            }
 
-            Self::Edit(ShortPath{short: None, ..}) => *self = Self::Edit(ShortPath{short: Some(value), path: None}),
-            Self::Edit(ShortPath{short, path: None}) => *self = Self::Edit(ShortPath{short, path: Some(std_path(&value))}),
+            Self::Edit(ShortPath { short: None, .. }) => {
+                *self = Self::Edit(ShortPath {
+                    short: Some(value),
+                    path: None,
+                });
+            }
+            Self::Edit(ShortPath { short, path: None }) => {
+                *self = Self::Edit(ShortPath {
+                    short,
+                    path: Some(std_path(&value)),
+                });
+            }
 
             Self::Rm(st) if st.is_empty() => *self = Self::Rm(value),
             Self::Del(st) if st.is_empty() => *self = Self::Del(value),
 
-            Self::Get(_) | Self::Edit(_) | Self::Add(_)
-            | Self::Rm(_) | Self::Del(_) | Self::Decr(_) => {
+            Self::Get(_)
+            | Self::Edit(_)
+            | Self::Add(_)
+            | Self::Rm(_)
+            | Self::Del(_)
+            | Self::Decr(_) => {
                 user_error!("Too many arguments for <{self}> command.");
             }
         }
@@ -181,11 +217,18 @@ fn path2dir(path: &str) -> String {
 ///
 pub fn std_path(ipath: &str) -> String {
     let mut path = ipath.to_owned().replace('\\', "/");
-    
-    let here = std::env::current_dir().user_error("Couldn't access current path", None).to_str().user_error("Error while casting current path to str", None).to_owned().replace('\\', "/");
-    let last_slash = here.rfind('/').user_error("Expected a slash in the path", None);
+
+    let here = std::env::current_dir()
+        .user_error("Couldn't access current path", None)
+        .to_str()
+        .user_error("Error while casting current path to str", None)
+        .to_owned()
+        .replace('\\', "/");
+    let last_slash = here
+        .rfind('/')
+        .user_error("Expected a slash in the path", None);
     let (father, _) = here.split_at(last_slash);
-    
+
     path = path.replace("..", father);
     match path.chars().next() {
         None => path = here,
@@ -195,8 +238,9 @@ pub fn std_path(ipath: &str) -> String {
         _ => path = format!("{here}/{path}"),
     }
 
-    let mut to_lower = true; 
-    let mut res = path.chars()
+    let mut to_lower = true;
+    let mut res = path
+        .chars()
         .map(|char| match char {
             '\\' => {
                 to_lower = false;
@@ -213,7 +257,7 @@ pub fn std_path(ipath: &str) -> String {
     if res.ends_with('/') {
         res.pop();
     }
-    res    
+    res
 }
 
 /// Trait to append a default value to a command.
@@ -225,17 +269,28 @@ pub trait AppendDefault {
 impl AppendDefault for Option<&mut Cmd> {
     fn append_default(self, value: &str) {
         if let Some(cmd) = self {
-            #[rustfmt::skip]
             match cmd {
-                Cmd::Add(ShortPath {short: None, path: None})
-                | Cmd::Edit(ShortPath {short: None, path: None}) => {
-                    cmd.append(path2dir(value)); cmd.append(value.to_owned());
+                Cmd::Add(ShortPath {
+                    short: None,
+                    path: None,
+                })
+                | Cmd::Edit(ShortPath {
+                    short: None,
+                    path: None,
+                }) => {
+                    cmd.append(path2dir(value));
+                    cmd.append(value.to_owned());
                 }
                 Cmd::Add(ShortPath { path: None, .. })
                 | Cmd::Edit(ShortPath { path: None, .. }) => cmd.append(value.to_owned()),
 
-                Cmd::Get(_) | Cmd::Add(_) | Cmd::Edit(_) 
-                | Cmd::Rm(_) | Cmd::Del(_) | Cmd::Decr(_) | Cmd::Reset => (),
+                Cmd::Get(_)
+                | Cmd::Add(_)
+                | Cmd::Edit(_)
+                | Cmd::Rm(_)
+                | Cmd::Del(_)
+                | Cmd::Decr(_)
+                | Cmd::Reset => (),
             }
         }
     }

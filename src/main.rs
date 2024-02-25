@@ -24,14 +24,14 @@
 //! * `-delete` (or `-del`) - Remove a shortcut from the list of supported shortcuts.
 //!     - Usage: `. gt -delete [path]`.
 //!     - Panics: If no path is given.
-//! * `-edit` - Edit the path of a directory associated with a shortcut.
+//! * `-edit` (or `-e`) - Edit the path of a directory associated with a shortcut.
 //!     - Usage: `. gt -edit [shortcut] [new path]`.
 //!     - Note: If no new path is given, the current directory is used. If no shortcut is given, the name of the current folder is used.
 //! * `-reset` - Reset the usage of all the directories in the list of supported directories (all set to 0, ⚠️no confirmation and no backup⚠️).
 //! * `-decrement` (or `-decr`) - Decrement the usage of a directory in the list of supported directories.
 //!     - Usage: `. gt -decrement [int]`.
 //!     - Panics: If no decrementation level is given.
-//! * `-pop` (or `-p`) - Pop the last directory from the history of directories (only works if you use only `goto` to navigate through directories).
+//! * `-pop` (or `-p` or `<`) - Pop the last directory from the history of directories (only works if you use only `goto` to navigate through directories).
 //! * `-state` (or `?`) - Print the state of the list of supported directories.
 //!     - Note: The state is printed in the following format: `path shortcut1 shortcut2 ... priority_level\n...`.
 //! * `-noclear` (or `-nc` or `!`) - The terminal is cleared by default after the command. Use this argument to avoid clearing the terminal.
@@ -91,7 +91,7 @@ mod hist;
 use errors::WriteError;
 
 use crate::commands::{AppendDefault, Cmd, ShortPath, ToCmd};
-use crate::errors::{CommandError, ReadError};
+use crate::errors::CommandError;
 
 use std::env;
 use std::process;
@@ -114,7 +114,7 @@ struct GlobalData<'global> {
     /// Gives the alias of every supported command
     aliass: collections::HashMap<&'global str, &'global str>,
     /// Gives the arguments that don't require reading `lib/dirs.csv`.
-    no_dirs: [&'global str; 6], //TODO: Specifying here the length is awful.
+    no_dirs: &'global [&'global str],
 }
 
 /// Defining the data for `GlobalData`
@@ -132,10 +132,12 @@ impl<'global> Default for GlobalData<'global> {
 
         let mut aliass = collections::HashMap::new();
         aliass.insert("-a", "-add");
+        aliass.insert("-e", "-edit");
         aliass.insert("-rm", "-remove");
         aliass.insert("-del", "-delete");
         aliass.insert("-decr", "-decrement");
         aliass.insert("-p", "-pop");
+        aliass.insert("<", "-pop");
         aliass.insert("?", "-state");
         aliass.insert("-nc", "-noclear");
         aliass.insert("!", "-noclear");
@@ -147,34 +149,24 @@ impl<'global> Default for GlobalData<'global> {
         let unix = cfg!(target_os = "linux");
         assert!(unix || cfg!(target_os = "windows"), "Unsupported OS");
 
-        let curr = env::current_exe()
-            .read_error("main.rs", None)
+        let libfolder = env::current_exe()
+            .unwrap_or_else(|err| {
+                panic!("{err}");
+            })
             .parent()
             .expect("No parent of main.rs.")
             .parent()
             .expect("No grandparent of main.rs.")
-            .join("lib");
+            .join("lib/");
 
         Self {
-            dirs: match curr.join("dirs.csv").into_os_string().into_string() {
-                Ok(path) => path,
-                Err(er) => {
-                    user_error!("Unable to read file dirs.csv: {er:?}");
-                    String::default()
-                }
-            },
-            hist: match curr.join("hist.csv").into_os_string().into_string() {
-                Ok(path) => path,
-                Err(er) => {
-                    user_error!("Unable to read file hist.csv: {er:?}");
-                    String::default()
-                }
-            },
+            dirs: libfolder.join("dirs.csv").to_string_lossy().to_string(),
+            hist: libfolder.join("hist.csv").to_string_lossy().to_string(),
             incr: 10,
             unix,
             argcs,
             aliass,
-            no_dirs: ["-noclear", "-code", "-still", "-pop", "-state", "-clear"],
+            no_dirs: &["-noclear", "-code", "-still", "-pop", "-state", "-clear"],
         }
     }
 }
@@ -197,13 +189,17 @@ impl<'global> Default for GlobalData<'global> {
 /// The function also calls the `clear` function to clear the terminal, unless the `noclear` argument is present.
 fn no_dirs(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
     let mut res = None;
-    #[rustfmt::skip]
+
     args2.iter().for_each(|arg| match arg.as_str() {
         "-pop" => res = Some(hist::popd(hist)),
         "-state" => dirs::state(dirs),
         "-clear" => fs::write(dirs, "").write_error(dirs),
         "-code" | "-noclear" | "-still" => (),
-        _ => user_error!("Invalid command <{}> in <{}>", arg, env::args().collect::<Vec<String>>().join(" ")),
+        _ => user_error!(
+            "Invalid command <{}> in <{}>",
+            arg,
+            env::args().collect::<Vec<String>>().join(" ")
+        ),
     });
     res
 }
@@ -221,12 +217,11 @@ fn no_dirs(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
 fn vscode(args2: &[String], path: &str) {
     if args2.contains(&String::from("-code")) {
         match process::Command::new("code").arg(path).spawn() {
-            Ok(mut subprocesses) => match subprocesses.wait() {
-                Ok(_) => (),
-                Err(er) => command_error!("Unable to open VSCode: {er}"),
-            },
+            Ok(mut subprocesses) => {
+                let _ = subprocesses.wait().command_error("Unable to open VSCode");
+            }
             Err(er) => command_error!("Unable to open VSCode: {er}"),
-        }
+        };
     }
 }
 
@@ -238,10 +233,9 @@ fn vscode(args2: &[String], path: &str) {
 /// This function is used to clear the terminal, unless the `-noclear` argument is present.
 /// The function is called after opening the directory in Visual Studio Code, and after updating the usage of the directory.
 /// The function is also called at the beginning of the program, to clear the terminal before the command is executed.
-#[rustfmt::skip]
 #[allow(clippy::print_stderr)]
 fn clear_terminal(args2: &[String], get: bool) {
-    if !args2.contains(&String::from("-noclear")) && !get && !args2.contains(&String::from("-still")) {
+    if !args2.contains(&String::from("-noclear")) && !get {
         //TODO: This is horrible, but I don't know how to clear the terminal in a better way.
         eprint!("\x1B[2J\x1B[1;1H");
     }
@@ -261,7 +255,7 @@ fn clear_terminal(args2: &[String], get: bool) {
 /// The function is also used to check that the number of arguments of the command is valid.
 /// The function is also used to separate the arguments of the command that are not part of the command.
 ///
-// #[rustfmt::skip]
+//
 fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
     let mut cmdline = env::args().skip(1);
     let mut args1: Vec<Cmd> = vec![];
@@ -280,7 +274,6 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
             Some(arg) => {
                 let curr = (*gdata.aliass.get(arg.as_str()).unwrap_or(&arg.as_str())).to_owned();
 
-                #[rustfmt::skip]
                 match gdata.argcs.get(curr.as_str()) {
                     Some(value) => {
                         if cmdline.len() < *value {
@@ -291,15 +284,20 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
 
                     None => match curr.as_str() {
                         "features" => break,
-                        "-get" => { get = true; 
-                                    args1.push(curr.to_cmd()); },
+                        "-get" => {
+                            get = true;
+                            args1.push(curr.to_cmd());
+                        }
                         // Is a no_dirs command (code, clear, still, pop, state, noclear, etc.)
                         _ if gdata.no_dirs.contains(&curr.as_str()) => args2.push(curr.clone()),
                         // Is an argument to a previous option
                         _ => match args1.last_mut() {
-                            None => args1.push(Cmd::Get(ShortPath{ short: Some(curr.clone()), path: None})),
+                            None => args1.push(Cmd::Get(ShortPath {
+                                short: Some(curr.clone()),
+                                path: None,
+                            })),
                             Some(last) => last.append(curr),
-                            }
+                        },
                     },
                 }
             }
@@ -338,7 +336,6 @@ fn dos2unix(path: String, unix: bool) -> String {
 
 ///////////////////////////////: Main  :///////////////////////////////
 
-#[rustfmt::skip]
 fn main() {
     let gdata = GlobalData::default();
     let (args1, args2, get) = get_args(&gdata);
@@ -348,16 +345,24 @@ fn main() {
 
     let read = pop_path.as_ref().is_none() && short_path.as_ref().is_some();
 
-    let os_path = dos2unix( pop_path.unwrap_or_else(|| short_path.unwrap_or_default()), gdata.unix);
+    let os_path = dos2unix(
+        pop_path.unwrap_or_else(|| short_path.unwrap_or_default()),
+        gdata.unix,
+    );
 
-    if read { hist::pushd(&gdata.hist, &os_path); };
+    if read {
+        hist::pushd(&gdata.hist, &os_path);
+    };
 
     vscode(&args2, &os_path);
 
-    #[rustfmt::skip]
     #[allow(clippy::print_stdout)]
-    {print!("{}#{}#{}",
+    {
+        print!(
+            "{}#{}#{}",
             u8::from(args2.contains(&String::from("-still"))),
             u8::from(get),
-            &os_path);};
+            &os_path
+        );
+    };
 }
