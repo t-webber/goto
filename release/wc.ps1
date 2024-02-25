@@ -6,4 +6,4 @@ $path = $path -replace '\\', '/'
 $path = '/mnt/' + $path -replace ':', ''
 # Write-Host "Remote: $path"
 # Sleep 1
-Invoke-Expression "Code.exe --remote wsl+Debian $path"
+Invoke-Expression "Code.exe --remote wsl+Ubuntu $path"

@@ -1,5 +1,5 @@
-loc=$(dirname $0)
-loc=$loc"/goto"
+script_path="${BASH_SOURCE[0]}"
+loc="$(dirname "$script_path")/goto"
 res=$(eval "$loc $1 $2 $3 $4 $5 $6 $7 $8 $9")
 if [[ $res == *"#"* ]]; then
     still=${res:0:1}
