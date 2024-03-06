@@ -4,15 +4,22 @@
 
 This is a simple tool to help you navigate to a location in your file system. It is a simple wrapper around the `cd` command. It is designed to be used in a shell environment.
 
-A tool is also provided to open `VSCode` in a specific location: `c`. You can run it in the `run` window (`windows`+`R`) or in any terminal. Thanks to `c`, you can directly open your project with `VSCode` without having to navigate to the project folder. If you are on `WSL`, you can use `wc` to open the project in `VSCode` in a remote `WSL` window.
+Create a shortcut to a directory that you use often, and then use the shortcut to navigate to that directory. It is a simple way to save time and reduce the number of keystrokes needed to navigate to a directory.
 
-You will also found a `expl` script: it opens a specific location in the file explorer. In the same way than `c`, you can use `expl` in the `run` window or in any terminal.
+You can also use it as a plain `cd` command, and it will work the same way.
 
-It is written in `Rust` and is cross-platform, available on Windows and Unix-based systems. It also works on [WSL](https://learn.microsoft.com/en-us/windows/wsl/install).
+## Tools
+
+- `g`: go to a location in the file system (usage: shell)
+- `c`: open a location in `VSCode` (usage: shell or run window)
+- `wc`: open a location in `VSCode` in a remote `WSL` window (usage: shell or run window)
+- `e`: open a location in the file explorer (usage: shell or run window)
+
+It is written in `Rust` and is cross-platform, available on Windows and Unix-based systems. It also works on [WSL](https://learn.microsoft.com/en-us/windows/wsl/install) with the same shortcuts
 
 ## Usage
 
-You can find examples and documentation [here](../rust_doc/doc/goto/index.html).
+You can find examples and documentation [here](./cargo/doc/goto/index.html).
 
 ## Requirements
 

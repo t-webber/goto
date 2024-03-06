@@ -1,6 +1,5 @@
 use core::fmt::Write;
-use std::fs;
-use std::process;
+use std::{fs, path, process};
 
 use crate::commands::{Cmd, ShortPath};
 use crate::errors::{ReadError, SingleError, WriteError};
@@ -383,10 +382,17 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
         .map(|dline| read_dline(dline.trim(), args, &mut success, incr, &mut sstate))
         .collect();
 
-    let mut res: String = sstate
-        .correct
-        .unwrap_or_else(|| sstate.prioritised.unwrap_or_default());
-    res.push('/');
+    // dbg!(&sstate);
+
+    let mut res = match sstate.correct {
+        Some(x) => Some(x),
+        None => sstate.prioritised,
+    }
+    .map(|x| {
+        let mut result = x;
+        result.push('/');
+        result
+    });
     let mut some = false;
     let mut here = None;
 
@@ -399,12 +405,15 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
             //     res = None;
             // }
             Cmd::Get(ShortPath { short, path }) => {
+                some = true;
                 if here.is_none() {
                     here = (*short).clone();
+                } else {
+                    user_error!("Multiple <-get> commands.");
                 }
                 if success {
-                    some = true;
-                    res.push_str((*path).clone().unwrap_or_default().as_str());
+                    res = res
+                        .map(|content| format!("{content}{}", (*path).clone().unwrap_or_default()));
                 }
             }
             _ if success => (),
@@ -431,10 +440,19 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
     }
 
     fs::write(dpath, data).write_error(dpath);
+
+    // dbg!(&some, &here, &res);
     if some {
-        Some(res)
+        match here {
+            Some(local)
+                if res.is_none() || (!local.is_empty() && path::Path::new(&local).exists()) =>
+            {
+                Some(local)
+            }
+            _ => res,
+        }
     } else {
-        here
+        None
     }
 }
 

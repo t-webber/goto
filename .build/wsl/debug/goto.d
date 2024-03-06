@@ -1,0 +1,1 @@
+/mnt/d/files/dev/rust/goto/.build/wsl/debug/goto: /mnt/d/files/dev/rust/goto/src/commands.rs /mnt/d/files/dev/rust/goto/src/dirs.rs /mnt/d/files/dev/rust/goto/src/errors.rs /mnt/d/files/dev/rust/goto/src/hist.rs /mnt/d/files/dev/rust/goto/src/main.rs

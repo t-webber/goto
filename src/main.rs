@@ -1,12 +1,13 @@
 #![warn(
     clippy::all,
     clippy::pedantic,
-    // clippy::restriction,
+    clippy::restriction,
     clippy::nursery,
     clippy::cargo
 )]
 #![feature(stmt_expr_attributes)]
 #![allow(clippy::implicit_return, clippy::single_call_fn)]
+#![allow(clippy::string_add)]
 #![allow(clippy::pattern_type_mismatch)]
 ///////////////////////////////: Documentation  :///////////////////////////////
 
@@ -91,14 +92,13 @@ mod hist;
 use errors::WriteError;
 
 use crate::commands::{AppendDefault, Cmd, ShortPath, ToCmd};
-use crate::errors::CommandError;
+use crate::errors::InteractionError;
 
-use std::env;
-use std::process;
-use std::{collections, fs};
+use std::{collections, env, fs, path, process};
 
 ///////////////////////////////: Global static data  :///////////////////////////////
 
+#[derive(Debug)]
 /// Structure to contain all the static data of the program
 struct GlobalData<'global> {
     /// Path to the file containing the list of shortcuts defined by the user with the `-add` and `-edit` commands.
@@ -149,19 +149,51 @@ impl<'global> Default for GlobalData<'global> {
         let unix = cfg!(target_os = "linux");
         assert!(unix || cfg!(target_os = "windows"), "Unsupported OS");
 
-        let libfolder = env::current_exe()
-            .unwrap_or_else(|err| {
-                panic!("{err}");
-            })
-            .parent()
-            .expect("No parent of main.rs.")
-            .parent()
-            .expect("No grandparent of main.rs.")
-            .join("lib/");
+        let libfolder = if unix {
+            "/mnt/d/windows/data/goto/"
+        } else {
+            "d:/windows/data/goto/"
+        }
+        .to_owned();
+
+        // let libfolder = if unix {
+        //     format!(
+        //         "{}/.goto/",
+        //         env::var("HOME").system_error("Home variable not found")
+        //     )
+        // } else {
+        //     format!(
+        //         "{}/goto/",
+        //         env::var("APPDATA").system_error("Appdata variable not found")
+        //     )
+        // };
+
+        if !path::Path::new(&libfolder).exists() {
+            fs::create_dir_all(&libfolder).write_error(&libfolder);
+        }
+
+        // let libfolder = env::current_exe()
+        //     .system_error("Access to current directory forbidden")
+        //     .parent()
+        //     .expect("No parent of main.rs.")
+        //     .parent()
+        //     .expect("No grandparent of main.rs.")
+        //     .join("lib/");
+
+        let dirs = libfolder.clone() + "dirs.csv";
+        let hist = libfolder + "hist.csv";
+
+        if !path::Path::new(&dirs).exists() {
+            fs::write(&dirs, "").write_error(&dirs);
+        }
+
+        if !path::Path::new(&hist).exists() {
+            fs::write(&hist, "").write_error(&hist);
+        }
 
         Self {
-            dirs: libfolder.join("dirs.csv").to_string_lossy().to_string(),
-            hist: libfolder.join("hist.csv").to_string_lossy().to_string(),
+            dirs,
+            hist,
             incr: 10,
             unix,
             argcs,
@@ -218,7 +250,7 @@ fn vscode(args2: &[String], path: &str) {
     if args2.contains(&String::from("-code")) {
         match process::Command::new("code").arg(path).spawn() {
             Ok(mut subprocesses) => {
-                let _ = subprocesses.wait().command_error("Unable to open VSCode");
+                subprocesses.wait().command_error("Unable to open VSCode");
             }
             Err(er) => command_error!("Unable to open VSCode: {er}"),
         };
@@ -236,7 +268,6 @@ fn vscode(args2: &[String], path: &str) {
 #[allow(clippy::print_stderr)]
 fn clear_terminal(args2: &[String], get: bool) {
     if !args2.contains(&String::from("-noclear")) && !get {
-        //TODO: This is horrible, but I don't know how to clear the terminal in a better way.
         eprint!("\x1B[2J\x1B[1;1H");
     }
 }
@@ -341,6 +372,7 @@ fn main() {
     let (args1, args2, get) = get_args(&gdata);
     clear_terminal(&args2, get);
     let short_path = dirs::read(&gdata.dirs, &args1, gdata.incr);
+
     let pop_path = no_dirs(&gdata.dirs, &gdata.hist, &args2); // result of pop
 
     let read = pop_path.as_ref().is_none() && short_path.as_ref().is_some();

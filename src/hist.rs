@@ -77,7 +77,7 @@ pub fn popd(histpath: &str) -> String {
 
     let mut lines = collections::LinkedList::new();
 
-    reader.lines().for_each(|line| match line {
+    reader.lines().for_each(|res| match res {
         Ok(line) if !line.trim().is_empty() => {
             match line.split(';').next() {
                 Some(current) if Path::new(current).exists() => {
