@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clear_terminal","dos2unix","get_args","main","no_dirs","vscode"],"macro":["command_error","data_error","file_error","general_error","internal_error","system_error","user_error"],"mod":["commands","dirs","errors","hist"],"struct":["GlobalData"]};

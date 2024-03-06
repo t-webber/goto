@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add","edit","get","read","read_dline","remove","state"],"struct":["DirsLine","SearchState"],"trait":["ReadVec"]};

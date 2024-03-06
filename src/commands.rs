@@ -2,6 +2,7 @@ use crate::errors::SingleError;
 use crate::{general_error, user_error};
 use core::fmt;
 use core::mem;
+use std::env;
 
 /// Contains the shortcut and the path.
 /// Is used to store them and to pass them to a Cmd element.
@@ -218,7 +219,7 @@ fn path2dir(path: &str) -> String {
 pub fn std_path(ipath: &str) -> String {
     let mut path = ipath.to_owned().replace('\\', "/");
 
-    let here = std::env::current_dir()
+    let here = env::current_dir()
         .user_error("Couldn't access current path", None)
         .to_str()
         .user_error("Error while casting current path to str", None)
@@ -232,7 +233,7 @@ pub fn std_path(ipath: &str) -> String {
     path = path.replace("..", father);
     match path.chars().next() {
         None => path = here,
-        Some('.') => path = format!("{here}{}", &path[1..]),
+        Some('.') => path = format!("{here}{}", &path.get(1..).unwrap_or_default()),
         Some('/') => (),
         _ if path.chars().nth(1) == Some(':') => (),
         _ => path = format!("{here}/{path}"),

@@ -1,0 +1,1 @@
+D:\files\dev\rust\goto\.build\win\debug\goto.exe: D:\files\dev\rust\goto\src\commands.rs D:\files\dev\rust\goto\src\dirs.rs D:\files\dev\rust\goto\src\errors.rs D:\files\dev\rust\goto\src\hist.rs D:\files\dev\rust\goto\src\main.rs
