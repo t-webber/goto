@@ -382,18 +382,16 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
         .map(|dline| read_dline(dline.trim(), args, &mut success, incr, &mut sstate))
         .collect();
 
-    // dbg!(&sstate);
-
-    let mut res = match sstate.correct {
-        Some(x) => Some(x),
-        None => sstate.prioritised,
-    }
-    .map(|x| {
-        let mut result = x;
-        result.push('/');
-        result
-    });
-    let mut some = false;
+    // let mut res = match sstate.correct {
+    //     Some(x) => Some(x),
+    //     None => sstate.prioritised,
+    // }
+    // .map(|x| {
+    //     let mut result = x;
+    //     result.push('/');
+    //     result
+    // });
+    // let mut some = false;
     let mut here = None;
 
     for arg in args {
@@ -405,16 +403,23 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
             //     res = None;
             // }
             Cmd::Get(ShortPath { short, path }) => {
-                some = true;
-                if here.is_none() {
-                    here = (*short).clone();
-                } else {
-                    user_error!("Multiple <-get> commands.");
-                }
-                if success {
-                    res = res
-                        .map(|content| format!("{content}{}", (*path).clone().unwrap_or_default()));
-                }
+                // // some = true;
+                // if here.is_none() {
+                //     here.clone_from(short);
+                // };
+                // if success {
+                //     res = res
+                //         .map(|content| format!("{content}{}", (*path).clone().unwrap_or_default()));
+                // }
+                here = Some(format!(
+                    "{}/{}",
+                    (if success {
+                        sstate.correct.clone()
+                    } else {
+                        short.to_owned()
+                    })?,
+                    path.clone().unwrap_or_default()
+                ));
             }
             _ if success => (),
             Cmd::Reset | Cmd::Decr(_) => (),
@@ -441,19 +446,23 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
 
     fs::write(dpath, data).write_error(dpath);
 
-    // dbg!(&some, &here, &res);
-    if some {
-        match here {
-            Some(local)
-                if res.is_none() || (!local.is_empty() && path::Path::new(&local).exists()) =>
-            {
-                Some(local)
-            }
-            _ => res,
-        }
-    } else {
-        None
-    }
+    // dbg!(&res, &some, &here);
+
+    here.and_then(|x| path::Path::new(&x).exists().then_some(x))
+
+    // if some {
+    //     match here {
+    //         Some(local)
+    //             if (res.is_none() || (!local.is_empty() && path::Path::new(&local).exists()))
+    //                 && !code =>
+    //         {
+    //             Some(local)
+    //         }
+    //         _ => res,
+    //     }
+    // } else {
+    //     None
+    // }
 }
 
 /// Function to print state of the directories
@@ -475,6 +484,7 @@ pub fn state(dpath: &str) -> ! {
     let mut spaces: Vec<usize> = vec![];
     let binding = fs::read_to_string(dpath).read_error(dpath, None);
     let data = binding.lines().collect::<Vec<&str>>();
+
     for dline in &data {
         dline.split(';').enumerate().for_each(|(idx, elt)| {
             let new = elt.len().checked_add(1).unwrap_or(elt.len());

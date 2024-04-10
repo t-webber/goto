@@ -4,9 +4,7 @@
 ## Bugs and undesired behaviours
 
 //BUG: call on `-code` outputs 4 results => no cd implied.
-//BUG: No arguments => no output: travels home.
-//BUG: no argument travels home
-//BUG: code opens file if path not exists
+//BUG: code opens file if path not exists or most common file => should open GUI
 
 ## Corrections
 

@@ -1,14 +1,22 @@
 #![warn(
     clippy::all,
     clippy::pedantic,
+    clippy::style,
+    clippy::perf,
+    clippy::complexity,
+    clippy::correctness,
     clippy::restriction,
     clippy::nursery,
     clippy::cargo
 )]
 #![feature(stmt_expr_attributes)]
-#![allow(clippy::implicit_return, clippy::single_call_fn)]
+#![allow(clippy::blanket_clippy_restriction_lints)]
+#![allow(clippy::implicit_return)]
+#![allow(clippy::single_call_fn)]
 #![allow(clippy::string_add)]
-#![allow(clippy::pattern_type_mismatch)]
+// #![allow(clippy::pattern_type_mismatch)]
+#![allow(clippy::std_instead_of_core)]
+#![allow(clippy::question_mark_used)]
 ///////////////////////////////: Documentation  :///////////////////////////////
 
 //! `goto` is a command line tool to navigate through directories.
@@ -42,6 +50,7 @@
 //!    - Usage: `. gt -get [shortcut]`.
 //!    - Note: If no shortcut is given, you will get the path of the most used directory.
 //! * `-clear` (or `-cls`) - Totally errases the list of supported directories (⚠️no confirmation and no backup⚠️).
+//! * `-popclear` (or `-popcls`) - Totally errases the stack of recent directories (⚠️no confirmation and no backup⚠️).
 //! # Examples
 //! In reality, the command will clear the terminal once the command has finished, but the examples are written as if the terminal was not cleared.
 //! ### Add
@@ -89,7 +98,7 @@ mod errors;
 /// This module contains the functions to read and write the supported directories, their shortcuts and their usage.
 mod hist;
 
-use errors::WriteError;
+use errors::{ReadError, WriteError};
 
 use crate::commands::{AppendDefault, Cmd, ShortPath, ToCmd};
 use crate::errors::InteractionError;
@@ -145,6 +154,8 @@ impl<'global> Default for GlobalData<'global> {
         aliass.insert("%", "-still");
         aliass.insert("-g", "-get");
         aliass.insert("-cls", "-clear");
+        aliass.insert("-popcls", "-popclear");
+        aliass.insert("-", "-pop");
 
         let unix = cfg!(target_os = "linux");
         assert!(unix || cfg!(target_os = "windows"), "Unsupported OS");
@@ -205,6 +216,19 @@ impl<'global> Default for GlobalData<'global> {
 
 ///////////////////////////////: No dirs functions  :///////////////////////////////
 
+/// Delete the content of a file and backup the content of the file.
+/// And saves the content in the file with the same name but with the extension `.backup`.
+/// The previous backup is overwritten.
+/// # Arguments
+/// * `infilename` - The path to the file to clear
+fn delete_file(infilename: &str) {
+    let data = fs::read_to_string(infilename).read_error(infilename, None);
+    let outfilename = format!("{infilename}.backup");
+
+    fs::write(&outfilename, data).write_error(&outfilename);
+    fs::write(infilename, "").write_error(infilename);
+}
+
 /// Find the path of the directory to go to.
 /// # Arguments
 /// * `dirs` - The path to the file containing the directories
@@ -225,7 +249,8 @@ fn no_dirs(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
     args2.iter().for_each(|arg| match arg.as_str() {
         "-pop" => res = Some(hist::popd(hist)),
         "-state" => dirs::state(dirs),
-        "-clear" => fs::write(dirs, "").write_error(dirs),
+        "-clear" => delete_file(dirs),
+        "-popclear" => delete_file(hist),
         "-code" | "-noclear" | "-still" => (),
         _ => user_error!(
             "Invalid command <{}> in <{}>",
@@ -245,10 +270,14 @@ fn no_dirs(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
 /// The function uses the `code` command to open the directory in Visual Studio Code.
 /// The function raises a warning if the `code` command is not found.
 /// The function is called after finding the path of the directory to go to, and after updating the usage of the directory.
-///
 fn vscode(args2: &[String], path: &str) {
-    if args2.contains(&String::from("-code")) {
-        match process::Command::new("code").arg(path).spawn() {
+    if args2.contains(&"-code".to_owned()) && !path.is_empty() {
+        match process::Command::new("code")
+            .arg(path)
+            .stdout(process::Stdio::null())
+            .stderr(process::Stdio::null())
+            .spawn()
+        {
             Ok(mut subprocesses) => {
                 subprocesses.wait().command_error("Unable to open VSCode");
             }
@@ -286,12 +315,12 @@ fn clear_terminal(args2: &[String], get: bool) {
 /// The function is also used to check that the number of arguments of the command is valid.
 /// The function is also used to separate the arguments of the command that are not part of the command.
 ///
-//
-fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
+fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool, bool) {
     let mut cmdline = env::args().skip(1);
     let mut args1: Vec<Cmd> = vec![];
     let mut args2: Vec<String> = vec![];
     let mut get = false;
+    let mut still = false;
     let here11 = env::current_dir();
     let here22 = here11.command_error("Unable to get current directory. Access denied.");
     let here = here22
@@ -319,8 +348,12 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
                             get = true;
                             args1.push(curr.to_cmd());
                         }
+                        "-still" => {
+                            still = true;
+                            args2.push(curr);
+                        }
                         // Is a no_dirs command (code, clear, still, pop, state, noclear, etc.)
-                        _ if gdata.no_dirs.contains(&curr.as_str()) => args2.push(curr.clone()),
+                        _ if gdata.no_dirs.contains(&curr.as_str()) => args2.push(curr),
                         // Is an argument to a previous option
                         _ => match args1.last_mut() {
                             None => args1.push(Cmd::Get(ShortPath {
@@ -340,7 +373,7 @@ fn get_args(gdata: &GlobalData) -> (Vec<Cmd>, Vec<String>, bool) {
         args1.push(Cmd::default());
     }
 
-    (args1, args2, get)
+    (args1, args2, get, still)
 }
 
 /// Convers path to unix or dos, depending on the OS.
@@ -369,11 +402,12 @@ fn dos2unix(path: String, unix: bool) -> String {
 
 fn main() {
     let gdata = GlobalData::default();
-    let (args1, args2, get) = get_args(&gdata);
+    let (args1, args2, get, still) = get_args(&gdata);
     clear_terminal(&args2, get);
+
     let short_path = dirs::read(&gdata.dirs, &args1, gdata.incr);
 
-    let pop_path = no_dirs(&gdata.dirs, &gdata.hist, &args2); // result of pop
+    let pop_path = no_dirs(&gdata.dirs, &gdata.hist, &args2);
 
     let read = pop_path.as_ref().is_none() && short_path.as_ref().is_some();
 
@@ -390,11 +424,7 @@ fn main() {
 
     #[allow(clippy::print_stdout)]
     {
-        print!(
-            "{}#{}#{}",
-            u8::from(args2.contains(&String::from("-still"))),
-            u8::from(get),
-            &os_path
-        );
+        println!("{}", usize::from(get || still));
+        println!("{os_path}");
     };
 }

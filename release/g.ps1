@@ -1,24 +1,18 @@
-if (!$PSScriptRoot) {
-  # gtexe.exe
-    $CurrentDIR = Split-Path (Convert-Path ([environment]::GetCommandLineArgs()[0]))
-} else {
-  # gt.ps1
-  $CurrentDIR = $PSScriptRoot
+goto.exe $args | % { 
+  if ($_ -eq "0") {
+    $ChangeLocation = $true
+  } elseif ($_ -ne "1" -and $_) {
+    $Location += "$_`n"
+  } 
 }
 
-$Result = Invoke-Expression "$CurrentDIR\goto.exe $args" 
-$Result = $Result -split '#'
-
-if ($Result.length -gt 3) {
-  return $Result
-}
-
-if ($Result[1] -eq "1") {
-  return $Result[2] 
-}
-
-if ($Result[0] -eq "1") {
+if ($Location -eq $null) {
   return
 }
+$location = $Location.Trim()
 
-Set-Location $Result[2]
+if ($ChangeLocation -and $location -and (Test-Path $location)) {
+  Set-Location $Location
+} else {
+  Write-Output $Location
+}
