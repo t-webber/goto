@@ -407,7 +407,7 @@ pub fn read(dpath: &str, args: &[Cmd], incr: u32) -> Option<String> {
             Cmd::Get(ShortPath { short, path }) => {
                 some = true;
                 if here.is_none() {
-                    here = (*short).clone();
+                    here.clone_from(short);
                 } else {
                     user_error!("Multiple <-get> commands.");
                 }

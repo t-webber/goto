@@ -6,7 +6,9 @@
     clippy::cargo
 )]
 #![feature(stmt_expr_attributes)]
-#![allow(clippy::implicit_return, clippy::single_call_fn)]
+#![allow(clippy::implicit_return)]
+#![allow(clippy::single_call_fn)]
+#![allow(clippy::blanket_clippy_restriction_lints)]
 #![allow(clippy::string_add)]
 #![allow(clippy::pattern_type_mismatch)]
 ///////////////////////////////: Documentation  :///////////////////////////////
@@ -248,7 +250,10 @@ fn no_dirs(dirs: &str, hist: &str, args2: &[String]) -> Option<String> {
 ///
 fn vscode(args2: &[String], path: &str) {
     if args2.contains(&String::from("-code")) {
-        match process::Command::new("code").arg(path).spawn() {
+        match process::Command::new("cmd")
+            .args(["/C", &format!("code {path}")])
+            .spawn()
+        {
             Ok(mut subprocesses) => {
                 subprocesses.wait().command_error("Unable to open VSCode");
             }
@@ -392,7 +397,9 @@ fn main() {
     {
         print!(
             "{}#{}#{}",
-            u8::from(args2.contains(&String::from("-still"))),
+            u8::from(
+                args2.contains(&String::from("-still")) || args2.contains(&String::from("-code"))
+            ),
             u8::from(get),
             &os_path
         );
