@@ -2,12 +2,11 @@ build/
 target/
 tests/
 lib/
-docs/cargo/.rustc_info.json
-docs/cargo/CACHEDIR.TAG
-docs/cargo/.rustdoc_fingerprint.json
-docs/cargo/debug
+docs/cargo/
 release/goto.exe
 release/goto
 temp/
-**.lock
-Cargo.lock
+*.lock*
+.*/
+*.exe
+tools
