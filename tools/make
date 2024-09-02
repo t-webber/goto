@@ -1,3 +1,0 @@
-ry
-rm ./release/goto
-cp ./.build/wsl/debug/goto ./release/

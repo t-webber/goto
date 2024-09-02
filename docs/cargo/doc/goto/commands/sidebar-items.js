@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"enum":["Cmd"],"fn":["path2dir","std_path"],"struct":["ShortPath"],"trait":["AppendDefault","ToCmd"]};
